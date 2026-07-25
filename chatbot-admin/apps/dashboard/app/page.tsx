@@ -57,8 +57,8 @@ function asText(value: unknown): string {
 
 export default function HomePage() {
   const [session, setSession] = useState<Session | null>(null);
-  const [email, setEmail] = useState("owner@example.com");
-  const [password, setPassword] = useState("change-me-now");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [clientId, setClientId] = useState("");
   const [activeSection, setActiveSection] = useState<Section>("overview");
   const [data, setData] = useState<Record<string, any>>({});

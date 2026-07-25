@@ -14,8 +14,8 @@ export const apiRouter = Router();
 
 apiRouter.use("/health", healthRouter);
 apiRouter.use("/plugin", pluginRouter);
-apiRouter.use("/", adminRouter);
 apiRouter.use("/", authRouter);
+apiRouter.use("/", adminRouter);
 apiRouter.use("/", clientRouter);
 apiRouter.use("/", featuresRouter);
 apiRouter.use("/", opsRouter);
