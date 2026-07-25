@@ -466,12 +466,16 @@ export default function HomePage() {
     setError("");
     setNotice("");
     try {
-      await apiFetch("/platform/clients", session.token, {
+      const created = await apiFetch("/platform/clients", session.token, {
         method: "POST",
         body: JSON.stringify(platformClientDraft)
       });
       setNotice("Platform client created.");
       setPlatformClientDraft({ name: "", domain: "", plugin_secret: "" });
+      if (created?.data?.id) {
+        setClientId(created.data.id as string);
+        setActiveSection("overview");
+      }
       await loadSection("platform");
     } catch (nextError) {
       setError(nextError instanceof Error ? nextError.message : "Platform client create failed");
@@ -1537,7 +1541,7 @@ export default function HomePage() {
   }
 
   function renderPlatform() {
-    const clients = data.platform?.clients?.data ?? [];
+    const clients = (data.platform?.clients?.data ?? []).filter((row: any) => row.name !== "__platform_internal__");
     const users = data.platform?.users?.data ?? [];
     const releases = data.platform?.releases?.data ?? [];
     const compatibility = data.platform?.compatibility?.data ?? [];
@@ -1582,9 +1586,49 @@ export default function HomePage() {
           </button>
         </div>
 
-        <div className="panel">
+        <div className="panel full-width">
           <h2>Platform Clients</h2>
-          <pre className="output">{JSON.stringify(clients, null, 2)}</pre>
+          <div className="table-wrap">
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Client ID</th>
+                  <th>Primary Domain</th>
+                  <th>License</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {clients.length ? (
+                  clients.map((row: any) => (
+                    <tr key={row.id}>
+                      <td>{row.name}</td>
+                      <td><code>{row.id}</code></td>
+                      <td>{row.allowedDomains?.[0]?.domain ?? "-"}</td>
+                      <td>{row.licenses?.[0]?.status ?? "-"}</td>
+                      <td>
+                        <button
+                          className="secondary"
+                          onClick={() => {
+                            setClientId(row.id);
+                            setActiveSection("overview");
+                            void loadSection("overview");
+                          }}
+                        >
+                          Open Client
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={5} className="muted">No client accounts created yet.</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
 
         <div className="panel">
