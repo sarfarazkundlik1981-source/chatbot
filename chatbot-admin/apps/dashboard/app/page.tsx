@@ -108,6 +108,64 @@ function optionalUrl(value: string) {
   return trimmed ? trimmed : undefined;
 }
 
+function optionalText(value: string) {
+  const trimmed = value.trim();
+  return trimmed ? trimmed : undefined;
+}
+
+function normalizeRequestBody(path: string, body: unknown) {
+  if (!body || typeof body !== "object") {
+    return body;
+  }
+
+  const record = body as Record<string, unknown>;
+
+  if (path.endsWith("/branding")) {
+    return {
+      ...record,
+      logo_url: optionalUrl(String(record.logo_url ?? "")),
+      avatar_url: optionalUrl(String(record.avatar_url ?? "")),
+      launcher_icon_url: optionalUrl(String(record.launcher_icon_url ?? ""))
+    };
+  }
+
+  if (path.endsWith("/internal-settings")) {
+    return {
+      ...record,
+      open_router_api_key: optionalText(String(record.open_router_api_key ?? "")),
+      fallback_model: optionalText(String(record.fallback_model ?? "")),
+      admin_notes: optionalText(String(record.admin_notes ?? ""))
+    };
+  }
+
+  if (path.endsWith("/domains")) {
+    return {
+      ...record,
+      domain: normalizeDomain(String(record.domain ?? ""))
+    };
+  }
+
+  if (path === "/platform/plugin-releases") {
+    return {
+      ...record,
+      version: String(record.version ?? "").trim(),
+      download_url: String(record.download_url ?? "").trim(),
+      release_notes: optionalText(String(record.release_notes ?? ""))
+    };
+  }
+
+  if (path === "/platform/clients") {
+    return {
+      ...record,
+      name: String(record.name ?? "").trim(),
+      domain: normalizeDomain(String(record.domain ?? "")),
+      plugin_secret: String(record.plugin_secret ?? "").trim()
+    };
+  }
+
+  return body;
+}
+
 export default function HomePage() {
   const [session, setSession] = useState<Session | null>(null);
   const [email, setEmail] = useState("");
@@ -479,15 +537,7 @@ export default function HomePage() {
     setError("");
     setNotice("");
     try {
-      const normalizedBody =
-        path.endsWith("/branding") && body && typeof body === "object"
-          ? {
-              ...body,
-              logo_url: optionalUrl(String((body as Record<string, unknown>).logo_url ?? "")),
-              avatar_url: optionalUrl(String((body as Record<string, unknown>).avatar_url ?? "")),
-              launcher_icon_url: optionalUrl(String((body as Record<string, unknown>).launcher_icon_url ?? ""))
-            }
-          : body;
+      const normalizedBody = normalizeRequestBody(path, body);
       await apiFetch(path, session.token, { method: "PUT", body: JSON.stringify(normalizedBody) });
       setNotice("Saved successfully.");
       await loadSection(activeSection);
@@ -546,13 +596,9 @@ export default function HomePage() {
     setError("");
     setNotice("");
     try {
-      const normalizedDomain = normalizeDomain(platformClientDraft.domain);
       const created = await apiFetch("/platform/clients", session.token, {
         method: "POST",
-        body: JSON.stringify({
-          ...platformClientDraft,
-          domain: normalizedDomain
-        })
+        body: JSON.stringify(normalizeRequestBody("/platform/clients", platformClientDraft))
       });
       setNotice("Platform client created.");
       setPlatformClientDraft({ name: "", domain: "", plugin_secret: "" });
@@ -601,7 +647,7 @@ export default function HomePage() {
     try {
       await apiFetch("/platform/plugin-releases", session.token, {
         method: "POST",
-        body: JSON.stringify(pluginReleaseDraft)
+        body: JSON.stringify(normalizeRequestBody("/platform/plugin-releases", pluginReleaseDraft))
       });
       setNotice("Plugin release created.");
       setPluginReleaseDraft({ version: "", download_url: "", release_notes: "" });
@@ -682,7 +728,7 @@ export default function HomePage() {
     setError("");
     setNotice("");
     try {
-      await apiFetch(path, session.token, { method: "POST", body: JSON.stringify(body) });
+      await apiFetch(path, session.token, { method: "POST", body: JSON.stringify(normalizeRequestBody(path, body)) });
       setNotice(successText);
       await loadSection(section);
     } catch (nextError) {
@@ -700,7 +746,7 @@ export default function HomePage() {
     setError("");
     setNotice("");
     try {
-      await apiFetch(path, session.token, { method: "PUT", body: JSON.stringify(body) });
+      await apiFetch(path, session.token, { method: "PUT", body: JSON.stringify(normalizeRequestBody(path, body)) });
       setNotice(successText);
       await loadSection(section);
     } catch (nextError) {
@@ -718,7 +764,7 @@ export default function HomePage() {
     setError("");
     setNotice("");
     try {
-      await apiFetch(path, session.token, { method: "PUT", body: JSON.stringify(body) });
+      await apiFetch(path, session.token, { method: "PUT", body: JSON.stringify(normalizeRequestBody(path, body)) });
       setNotice(successText);
       await loadSection("features");
     } catch (nextError) {
@@ -832,7 +878,7 @@ export default function HomePage() {
     setError("");
     setNotice("");
     try {
-      await apiFetch(path, session.token, { method: "POST", body: JSON.stringify(body) });
+      await apiFetch(path, session.token, { method: "POST", body: JSON.stringify(normalizeRequestBody(path, body)) });
       setNotice(successText);
       await loadSection("features");
     } catch (nextError) {
