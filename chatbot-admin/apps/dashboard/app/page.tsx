@@ -30,6 +30,27 @@ type Section =
 
 const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000/api/v1";
 const sections: Section[] = ["overview", "settings", "knowledge", "features", "domains", "licenses", "ctas", "flags", "plugin", "conversations", "leads", "audit", "health", "playground", "versions", "unanswered", "platform"];
+const sectionMeta: Record<Section, { label: string; description: string }> = {
+  overview: { label: "Overview", description: "Usage, cost, and installation summary for the selected client." },
+  settings: { label: "Settings", description: "Branding, widget behavior, AI instructions, and internal keys." },
+  knowledge: { label: "Knowledge", description: "Manage structured business information that grounds the assistant." },
+  features: { label: "Features", description: "Configure runtime product features, lead flows, and protection layers." },
+  domains: { label: "Domains", description: "Allowed website domains connected to this client." },
+  licenses: { label: "Licenses", description: "Trial and active license states for the current client." },
+  ctas: { label: "CTAs", description: "Call-to-action entries the widget can show to visitors." },
+  flags: { label: "Flags", description: "Feature flags and entitlements for this client." },
+  plugin: { label: "Plugin", description: "WordPress installation metadata and compatibility details." },
+  conversations: { label: "Conversations", description: "Transcript history and export access for visitor sessions." },
+  leads: { label: "Leads", description: "Lead capture output and related qualification data." },
+  audit: { label: "Audit Log", description: "Operational and configuration changes recorded for this client." },
+  health: { label: "Health", description: "Platform subsystem status, scheduler state, and integration health." },
+  playground: { label: "AI Playground", description: "Test the assistant with current saved configuration." },
+  versions: { label: "Config Versions", description: "Review configuration snapshots and rollback points." },
+  unanswered: { label: "Unanswered", description: "Questions the assistant could not resolve from current knowledge." },
+  platform: { label: "Platform Admin", description: "Global client management, releases, compatibility, and security events." }
+};
+
+const clientOptionalSections = new Set<Section>(["platform", "health"]);
 
 async function apiFetch(path: string, token: string, init?: RequestInit) {
   const response = await fetch(`${apiBase}${path}`, {
@@ -53,6 +74,10 @@ async function apiFetch(path: string, token: string, init?: RequestInit) {
 
 function asText(value: unknown): string {
   return typeof value === "string" ? value : "";
+}
+
+function isClientOptionalSection(section: Section) {
+  return clientOptionalSections.has(section);
 }
 
 export default function HomePage() {
@@ -151,7 +176,11 @@ export default function HomePage() {
   }, []);
 
   useEffect(() => {
-    if (!session || !clientId) {
+    if (!session) {
+      return;
+    }
+
+    if (!clientId && !isClientOptionalSection(activeSection)) {
       return;
     }
 
@@ -176,6 +205,9 @@ export default function HomePage() {
       };
       setSession(nextSession);
       setClientId(nextSession.clientId);
+      if (!nextSession.clientId) {
+        setActiveSection("platform");
+      }
       window.localStorage.setItem("chatbot_dashboard_session", JSON.stringify(nextSession));
     } catch (nextError) {
       setError(nextError instanceof Error ? nextError.message : "Login failed");
@@ -185,7 +217,11 @@ export default function HomePage() {
   }
 
   async function loadSection(section: Section) {
-    if (!session || !clientId) {
+    if (!session) {
+      return;
+    }
+
+    if (!clientId && !isClientOptionalSection(section)) {
       return;
     }
 
@@ -738,7 +774,12 @@ export default function HomePage() {
   function renderOverview() {
     const overview = data.overview?.data;
     if (!overview) {
-      return <div className="muted">No overview data loaded.</div>;
+      return (
+        <div className="empty-state panel">
+          <h3>No overview loaded</h3>
+          <p className="muted">Select a client and refresh to load analytics, usage, and cost summary data.</p>
+        </div>
+      );
     }
 
     const cards = [
@@ -1233,6 +1274,15 @@ export default function HomePage() {
   }
 
   function renderTableSection(section: Section, title: string) {
+    if (!clientId && !isClientOptionalSection(section)) {
+      return (
+        <div className="empty-state panel">
+          <h3>No client selected</h3>
+          <p className="muted">Paste a client ID in the header to load {title.toLowerCase()} for a tenant.</p>
+        </div>
+      );
+    }
+
     return (
       <div className="panel">
         <h2>{title}</h2>
@@ -1692,11 +1742,12 @@ export default function HomePage() {
     return (
       <main className="login-shell">
         <div className="panel auth-panel">
+          <div className="auth-kicker">Centralized Control</div>
           <h1>Chatbot Platform</h1>
-          <p className="muted">Sign in to manage the centralized WordPress chatbot platform.</p>
-          <input className="field" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="Email" />
+          <p className="muted">Sign in with your platform owner or platform admin account. Client ID is optional and can be selected after login.</p>
+          <input className="field" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="Platform email" />
           <input className="field" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Password" type="password" />
-          <input className="field" value={clientId} onChange={(event) => setClientId(event.target.value)} placeholder="Client ID" />
+          <input className="field" value={clientId} onChange={(event) => setClientId(event.target.value)} placeholder="Optional client ID" />
           <button className="primary" disabled={loading} onClick={() => void login()}>
             {loading ? "Signing in..." : "Sign In"}
           </button>
@@ -1709,20 +1760,33 @@ export default function HomePage() {
   return (
     <main className="shell">
       <aside className="sidebar">
-        <h1>Chatbot Platform</h1>
-        <p className="muted">Client {clientId || "not selected"}</p>
-        <div className="grid">
+        <div className="sidebar-brand">
+          <div className="sidebar-kicker">Admin Console</div>
+          <h1>Chatbot Platform</h1>
+          <p className="muted">Operate tenants, plugin installations, AI behavior, and lead flows from one place.</p>
+        </div>
+        <div className="sidebar-client-card">
+          <div className="sidebar-client-label">Active client</div>
+          <div className="sidebar-client-value">{clientId || "Platform-wide view"}</div>
+        </div>
+        <div className="nav-group-title">Workspace</div>
+        <div className="grid nav-grid">
           {sections.map((section) => (
             <button key={section} type="button" className={`nav-link ${activeSection === section ? "nav-active" : ""}`} onClick={() => setActiveSection(section)}>
-              {section}
+              <span>{sectionMeta[section].label}</span>
             </button>
           ))}
         </div>
       </aside>
       <section className="content">
-        <div className="panel">
-          <div className="toolbar">
-            <input className="field compact" value={clientId} onChange={(event) => setClientId(event.target.value)} placeholder="Client ID" />
+        <div className="page-header panel">
+          <div className="page-header-copy">
+            <div className="section-badge">{sectionMeta[activeSection].label}</div>
+            <h2>{sectionMeta[activeSection].label}</h2>
+            <p className="muted">{sectionMeta[activeSection].description}</p>
+          </div>
+          <div className="toolbar page-toolbar">
+            <input className="field compact" value={clientId} onChange={(event) => setClientId(event.target.value)} placeholder="Paste client ID to load tenant data" />
             <button className="secondary" onClick={() => void loadSection(activeSection)}>
               Refresh
             </button>
@@ -1743,10 +1807,18 @@ export default function HomePage() {
               Log Out
             </button>
           </div>
-          {error ? <div className="error-text">{error}</div> : null}
-          {notice ? <div className="success-text">{notice}</div> : null}
-          {loading ? <div className="muted">Loading...</div> : null}
         </div>
+        {!clientId && !isClientOptionalSection(activeSection) ? (
+          <div className="panel notice-panel">
+            <div>
+              <strong>Select a client to continue.</strong>
+              <p className="muted">Platform-wide sections such as Health and Platform Admin work without a client ID. Tenant-specific sections need a selected client.</p>
+            </div>
+          </div>
+        ) : null}
+        {error ? <div className="panel status-panel error-text">{error}</div> : null}
+        {notice ? <div className="panel status-panel success-text">{notice}</div> : null}
+        {loading ? <div className="panel status-panel muted">Loading latest data...</div> : null}
         {renderSection()}
       </section>
     </main>
