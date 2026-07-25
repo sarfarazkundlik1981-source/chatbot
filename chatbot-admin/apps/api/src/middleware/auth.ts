@@ -28,7 +28,12 @@ export function requireAuth(scope: "dashboard" | "plugin") {
 
 export function requireClientRole(roles: string[]) {
   return (_req: Request, res: Response, next: NextFunction): void => {
-    const auth = res.locals.auth as { clientRole?: string } | undefined;
+    const auth = res.locals.auth as { clientRole?: string; platformRole?: string } | undefined;
+    if (auth?.platformRole === "platform_owner" || auth?.platformRole === "platform_admin") {
+      next();
+      return;
+    }
+
     if (!auth?.clientRole || !roles.includes(auth.clientRole)) {
       sendError(res, 403, "FORBIDDEN", "You do not have permission to perform this action.");
       return;
