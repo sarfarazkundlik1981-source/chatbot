@@ -10,4 +10,4 @@ COPY . .
 RUN npx prisma generate --schema apps/api/prisma/schema.prisma
 RUN npm run build -w @platform/contracts && npm run build -w @platform/api
 
-CMD ["node", "apps/api/dist/index.js"]
+CMD ["node", "apps/api/dist/src/index.js"]
