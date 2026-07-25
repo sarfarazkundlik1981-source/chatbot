@@ -4,9 +4,9 @@ services:
   postgres:
     image: postgres:16-alpine
     environment:
-      POSTGRES_DB: chatbot
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: ${POSTGRES_DB:-chatbot}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
     ports:
       - "5432:5432"
     volumes:
@@ -17,23 +17,36 @@ services:
       context: .
       dockerfile: apps/api/Dockerfile
     environment:
-      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/chatbot
-      DASHBOARD_URL: http://localhost:3000
-      JWT_SECRET: dev-jwt-secret
-      ENCRYPTION_KEY: 0123456789abcdef0123456789abcdef
-      PLATFORM_OWNER_EMAIL: owner@example.com
-      PLATFORM_OWNER_PASSWORD: change-me-now
+      NODE_ENV: production
+      PORT: 4000
+      DATABASE_URL: ${DATABASE_URL:-postgresql://postgres:postgres@postgres:5432/chatbot}
+      APP_BASE_URL: ${APP_BASE_URL:-http://localhost:4000}
+      DASHBOARD_URL: ${DASHBOARD_URL:-http://localhost:3000}
+      JWT_SECRET: ${JWT_SECRET:-dev-jwt-secret}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-0123456789abcdef0123456789abcdef}
+      PLATFORM_OWNER_EMAIL: ${PLATFORM_OWNER_EMAIL:-owner@example.com}
+      PLATFORM_OWNER_PASSWORD: ${PLATFORM_OWNER_PASSWORD:-change-me-now}
+      OPENROUTER_BASE_URL: ${OPENROUTER_BASE_URL:-https://openrouter.ai/api/v1}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      MINIMUM_SUPPORTED_PLUGIN_VERSION: ${MINIMUM_SUPPORTED_PLUGIN_VERSION:-0.1.0}
+      RECOMMENDED_PLUGIN_VERSION: ${RECOMMENDED_PLUGIN_VERSION:-0.1.0}
+      MINIMUM_WORDPRESS_VERSION: ${MINIMUM_WORDPRESS_VERSION:-6.5.0}
+      MINIMUM_PHP_VERSION: ${MINIMUM_PHP_VERSION:-8.1.0}
     ports:
       - "4000:4000"
     depends_on:
       - postgres
+    command: sh -c "npx prisma migrate deploy --schema apps/api/prisma/schema.prisma && node apps/api/dist/src/index.js"
 
   dashboard:
     build:
       context: .
       dockerfile: apps/dashboard/Dockerfile
+      args:
+        NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:4000/api/v1}
     environment:
-      NEXT_PUBLIC_API_BASE_URL: http://localhost:4000/api/v1
+      NODE_ENV: production
+      NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:4000/api/v1}
     ports:
       - "3000:3000"
     depends_on:
