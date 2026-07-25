@@ -36,7 +36,7 @@ services:
       - "4000:4000"
     depends_on:
       - postgres
-    command: sh -c "npx prisma migrate deploy --schema apps/api/prisma/schema.prisma && node apps/api/dist/src/index.js"
+    command: sh -c "npx prisma migrate deploy --schema apps/api/prisma/schema.prisma && node apps/api/dist/index.js"
 
   dashboard:
     build:
