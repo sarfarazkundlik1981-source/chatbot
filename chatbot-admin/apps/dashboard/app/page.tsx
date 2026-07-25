@@ -7,6 +7,13 @@ type Session = {
   token: string;
   refreshToken?: string;
   clientId: string;
+  platformRole?: string | null;
+  clientRole?: string | null;
+};
+
+type ClientOption = {
+  id: string;
+  name: string;
 };
 
 type Section =
@@ -80,11 +87,26 @@ function isClientOptionalSection(section: Section) {
   return clientOptionalSections.has(section);
 }
 
+function normalizeDomain(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return "";
+  }
+
+  try {
+    const url = new URL(trimmed.startsWith("http://") || trimmed.startsWith("https://") ? trimmed : `https://${trimmed}`);
+    return url.hostname.toLowerCase();
+  } catch {
+    return trimmed.replace(/^https?:\/\//i, "").replace(/\/+$/, "").toLowerCase();
+  }
+}
+
 export default function HomePage() {
   const [session, setSession] = useState<Session | null>(null);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [clientId, setClientId] = useState("");
+  const [clientOptions, setClientOptions] = useState<ClientOption[]>([]);
   const [activeSection, setActiveSection] = useState<Section>("overview");
   const [data, setData] = useState<Record<string, any>>({});
   const [error, setError] = useState("");
@@ -176,6 +198,23 @@ export default function HomePage() {
   }, []);
 
   useEffect(() => {
+    if (!clientId) {
+      window.localStorage.removeItem("chatbot_dashboard_client_id");
+      return;
+    }
+
+    window.localStorage.setItem("chatbot_dashboard_client_id", clientId);
+  }, [clientId]);
+
+  useEffect(() => {
+    if (!session?.token) {
+      return;
+    }
+
+    void loadClientOptions(session.token);
+  }, [session?.token]);
+
+  useEffect(() => {
     if (!session) {
       return;
     }
@@ -201,7 +240,9 @@ export default function HomePage() {
       const nextSession = {
         token: payload.data.access_token as string,
         refreshToken: payload.data.refresh_token as string,
-        clientId: (payload.data.user.client_id as string | null) ?? clientId
+        clientId: (payload.data.user.client_id as string | null) ?? clientId,
+        platformRole: (payload.data.user.platform_role as string | null) ?? null,
+        clientRole: (payload.data.user.client_role as string | null) ?? null
       };
       setSession(nextSession);
       setClientId(nextSession.clientId);
@@ -213,6 +254,28 @@ export default function HomePage() {
       setError(nextError instanceof Error ? nextError.message : "Login failed");
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function loadClientOptions(token: string) {
+    try {
+      const clientsPayload = await apiFetch("/platform/clients", token);
+      const options = ((clientsPayload?.data ?? []) as Array<{ id: string; name: string }>).filter((row) => row.name !== "__platform_internal__");
+      setClientOptions(options.map((row) => ({ id: row.id, name: row.name })));
+
+      const storedClientId = window.localStorage.getItem("chatbot_dashboard_client_id") ?? "";
+      const preferredClientId = clientId || storedClientId;
+      const preferredClient = options.find((row) => row.id === preferredClientId);
+      if (preferredClient) {
+        setClientId(preferredClient.id);
+        return;
+      }
+
+      if (!clientId && options.length > 0) {
+        setClientId(options[0].id);
+      }
+    } catch {
+      setClientOptions([]);
     }
   }
 
@@ -466,9 +529,13 @@ export default function HomePage() {
     setError("");
     setNotice("");
     try {
+      const normalizedDomain = normalizeDomain(platformClientDraft.domain);
       const created = await apiFetch("/platform/clients", session.token, {
         method: "POST",
-        body: JSON.stringify(platformClientDraft)
+        body: JSON.stringify({
+          ...platformClientDraft,
+          domain: normalizedDomain
+        })
       });
       setNotice("Platform client created.");
       setPlatformClientDraft({ name: "", domain: "", plugin_secret: "" });
@@ -476,6 +543,7 @@ export default function HomePage() {
         setClientId(created.data.id as string);
         setActiveSection("overview");
       }
+      await loadClientOptions(session.token);
       await loadSection("platform");
     } catch (nextError) {
       setError(nextError instanceof Error ? nextError.message : "Platform client create failed");
@@ -1801,6 +1869,8 @@ export default function HomePage() {
     );
   }
 
+  const selectedClient = clientOptions.find((option) => option.id === clientId) ?? null;
+
   return (
     <main className="shell">
       <aside className="sidebar">
@@ -1811,7 +1881,7 @@ export default function HomePage() {
         </div>
         <div className="sidebar-client-card">
           <div className="sidebar-client-label">Active client</div>
-          <div className="sidebar-client-value">{clientId || "Platform-wide view"}</div>
+          <div className="sidebar-client-value">{selectedClient?.name ?? (clientId || "Platform-wide view")}</div>
         </div>
         <div className="nav-group-title">Workspace</div>
         <div className="grid nav-grid">
@@ -1830,7 +1900,18 @@ export default function HomePage() {
             <p className="muted">{sectionMeta[activeSection].description}</p>
           </div>
           <div className="toolbar page-toolbar">
-            <input className="field compact" value={clientId} onChange={(event) => setClientId(event.target.value)} placeholder="Paste client ID to load tenant data" />
+            {clientOptions.length ? (
+              <select className="field compact" value={clientId} onChange={(event) => setClientId(event.target.value)} aria-label="Select client">
+                <option value="">Platform-wide view</option>
+                {clientOptions.map((option) => (
+                  <option key={option.id} value={option.id}>
+                    {option.name}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <input className="field compact" value={clientId} onChange={(event) => setClientId(event.target.value)} placeholder="Paste client ID to load tenant data" />
+            )}
             <button className="secondary" onClick={() => void loadSection(activeSection)}>
               Refresh
             </button>

@@ -54,3 +54,4 @@ services:
 
 volumes:
   postgres-data:
+    name: chatbot-admin-postgres-data

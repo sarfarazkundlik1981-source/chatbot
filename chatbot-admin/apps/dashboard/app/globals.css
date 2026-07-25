@@ -36,7 +36,8 @@ body {
 
 button,
 input,
-textarea {
+textarea,
+select {
   font: inherit;
 }
 
@@ -191,6 +192,10 @@ a {
   color: var(--text);
   outline: none;
   transition: border-color 120ms ease, box-shadow 120ms ease, transform 120ms ease;
+}
+
+select.field {
+  appearance: none;
 }
 
 .field:focus {
