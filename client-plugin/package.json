@@ -1,0 +1,9 @@
+{
+  "name": "wordpress-chatbot-plugin",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Standalone WordPress connector plugin for the centralized chatbot platform.",
+  "scripts": {
+    "package": "powershell -NoProfile -Command \"if (Test-Path dist) { Remove-Item -Recurse -Force dist }; New-Item -ItemType Directory -Path dist | Out-Null; Compress-Archive -Path wordpress-chatbot.php,README.md,readme.txt,public,admin,assets,includes,languages -DestinationPath dist/wordpress-chatbot-plugin.zip -Force\""
+  }
+}

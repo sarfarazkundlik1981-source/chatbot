@@ -1,0 +1,708 @@
+(function () {
+  if (!window.WCP_CONFIG || !window.WCP_CONFIG.backendUrl || !window.WCP_CONFIG.clientId || !window.WCP_CONFIG.clientSecret) {
+    return;
+  }
+
+  const state = {
+    token: null,
+    conversationId: null,
+    resumeToken: window.localStorage.getItem("wcp_resume_token"),
+    cachedConfigVersion: Number(window.localStorage.getItem("wcp_config_version") || 0),
+    cachedConfig: window.localStorage.getItem("wcp_widget_config"),
+    config: null,
+    open: false,
+    embedded: false,
+    bootFailed: false
+  };
+
+  const apiBase = window.WCP_CONFIG.backendUrl.replace(/\/$/, "") + "/api/v1/plugin";
+
+  function matchesPath(list, currentPath) {
+    return Array.isArray(list) && list.some(function (item) {
+      return item && currentPath.indexOf(item) !== -1;
+    });
+  }
+
+  function shouldRenderWidget() {
+    if (window.WCP_CONFIG.desktopOnly && window.innerWidth < 768) {
+      return false;
+    }
+    if (window.WCP_CONFIG.mobileOnly && window.innerWidth >= 768) {
+      return false;
+    }
+    if (window.WCP_CONFIG.hideLoggedIn && window.WCP_CONFIG.isLoggedIn) {
+      return false;
+    }
+    if (window.WCP_CONFIG.hideCheckout && /checkout/i.test(window.WCP_CONFIG.currentPath || "")) {
+      return false;
+    }
+    if (window.WCP_CONFIG.includePages && window.WCP_CONFIG.includePages.length && !matchesPath(window.WCP_CONFIG.includePages, window.WCP_CONFIG.currentPath || "/")) {
+      return false;
+    }
+    if (window.WCP_CONFIG.excludePages && matchesPath(window.WCP_CONFIG.excludePages, window.WCP_CONFIG.currentPath || "/")) {
+      return false;
+    }
+    return true;
+  }
+
+  function createBox(tag, style) {
+    const element = document.createElement(tag);
+    if (style) {
+      element.setAttribute("style", style);
+    }
+    return element;
+  }
+
+  const launcher = createBox("button", "position:fixed;right:20px;bottom:20px;padding:12px 18px;border:none;border-radius:999px;background:#0ea5e9;color:#fff;cursor:pointer;z-index:9999");
+  launcher.type = "button";
+  launcher.textContent = "Chat";
+
+  const panel = createBox("div", "position:fixed;right:20px;bottom:78px;width:360px;max-width:calc(100vw - 24px);height:560px;background:#111827;color:#fff;border:1px solid rgba(255,255,255,.12);border-radius:14px;display:none;flex-direction:column;overflow:hidden;z-index:9999;box-shadow:0 18px 60px rgba(0,0,0,.35)");
+  const header = createBox("div", "padding:14px 16px;background:#0f172a;font-weight:600");
+  const messages = createBox("div", "flex:1;overflow:auto;padding:12px;display:flex;flex-direction:column;gap:10px");
+  const actions = createBox("div", "display:none;gap:8px;flex-wrap:wrap;padding:0 12px 12px");
+  const tools = createBox("div", "display:none;gap:8px;padding:0 12px 12px;flex-wrap:wrap");
+  const formHost = createBox("div", "display:none;padding:12px;border-top:1px solid rgba(255,255,255,.08)");
+  const composer = createBox("form", "display:flex;gap:8px;padding:12px;border-top:1px solid rgba(255,255,255,.08)");
+  const input = createBox("input", "flex:1;padding:10px 12px;border-radius:10px;border:1px solid rgba(255,255,255,.12);background:#0f172a;color:#fff");
+  const send = createBox("button", "padding:10px 14px;border:none;border-radius:10px;background:#0ea5e9;color:#fff;cursor:pointer");
+
+  input.type = "text";
+  input.placeholder = "Ask a question";
+  send.type = "submit";
+  send.textContent = "Send";
+  header.textContent = "Assistant";
+
+  composer.appendChild(input);
+  composer.appendChild(send);
+  panel.appendChild(header);
+  panel.appendChild(messages);
+  panel.appendChild(actions);
+  panel.appendChild(tools);
+  panel.appendChild(formHost);
+  panel.appendChild(composer);
+
+  function addMessage(role, text) {
+    const bubble = createBox(
+      "div",
+      [
+        "max-width:85%",
+        "padding:10px 12px",
+        "border-radius:12px",
+        role === "user" ? "background:#0ea5e9;align-self:flex-end" : "background:#1f2937;align-self:flex-start;white-space:pre-wrap"
+      ].join(";")
+    );
+    bubble.textContent = text;
+    messages.appendChild(bubble);
+    messages.scrollTop = messages.scrollHeight;
+  }
+
+  function setComposerDisabled(disabled) {
+    input.disabled = disabled;
+    send.disabled = disabled;
+    input.style.opacity = disabled ? "0.6" : "1";
+    send.style.opacity = disabled ? "0.6" : "1";
+    send.style.cursor = disabled ? "not-allowed" : "pointer";
+  }
+
+  function setUnavailableState(message) {
+    state.bootFailed = true;
+    setComposerDisabled(true);
+    hideInlineForm();
+    actions.innerHTML = "";
+    tools.innerHTML = "";
+    actions.style.display = "flex";
+    tools.style.display = "none";
+    messages.innerHTML = "";
+    addMessage("assistant", message || "Chat is temporarily unavailable. Please try again or use the contact options on this page.");
+    renderButtons(actions, [
+      {
+        label: "Retry",
+        onClick: function () {
+          state.bootFailed = false;
+          setComposerDisabled(false);
+          actions.style.display = "none";
+          messages.innerHTML = "";
+          void boot();
+        }
+      }
+    ]);
+  }
+
+  function renderButtons(container, buttons) {
+    container.innerHTML = "";
+    if (!buttons.length) {
+      container.style.display = "none";
+      return;
+    }
+    container.style.display = "flex";
+    buttons.forEach(function (buttonConfig) {
+      const button = createBox("button", "padding:8px 10px;border:none;border-radius:10px;background:#1f2937;color:#fff;cursor:pointer");
+      button.type = "button";
+      button.textContent = buttonConfig.label;
+      button.addEventListener("click", buttonConfig.onClick);
+      container.appendChild(button);
+    });
+  }
+
+  function notifyWordPressLead(details) {
+    if (!window.WCP_CONFIG.notifyAdmin || !window.WCP_CONFIG.ajaxUrl) {
+      return Promise.resolve();
+    }
+    const formData = new FormData();
+    formData.append("action", "wcp_notify_lead");
+    formData.append("nonce", window.WCP_CONFIG.notifyNonce || "");
+    formData.append("name", details.name || "");
+    formData.append("email", details.email || "");
+    formData.append("phone", details.phone || "");
+    formData.append("message", details.message || "");
+    return fetch(window.WCP_CONFIG.ajaxUrl, {
+      method: "POST",
+      body: formData,
+      credentials: "same-origin"
+    }).catch(function () {
+      return null;
+    });
+  }
+
+  function apiFetch(path, init) {
+    return fetch(apiBase + path, init).then(function (response) {
+      return response.json().then(function (payload) {
+        if (!response.ok) {
+          throw new Error((payload.error && payload.error.message) || "Request failed");
+        }
+        return payload;
+      });
+    });
+  }
+
+  function showInlineForm(title, fields, onSubmit) {
+    formHost.innerHTML = "";
+    formHost.style.display = "block";
+    const heading = createBox("div", "font-weight:600;margin-bottom:8px");
+    heading.textContent = title;
+    const form = createBox("form", "display:flex;flex-direction:column;gap:8px");
+    const inputs = {};
+    fields.forEach(function (field) {
+      const element = field.multiline ? createBox("textarea", "padding:10px 12px;border-radius:10px;border:1px solid rgba(255,255,255,.12);background:#0f172a;color:#fff") : createBox("input", "padding:10px 12px;border-radius:10px;border:1px solid rgba(255,255,255,.12);background:#0f172a;color:#fff");
+      if (!field.multiline) {
+        element.type = field.type || "text";
+      }
+      element.placeholder = field.label;
+      if (field.value !== undefined) {
+        element.value = field.value;
+      }
+      inputs[field.key] = element;
+      form.appendChild(element);
+    });
+    const submit = createBox("button", "padding:10px 14px;border:none;border-radius:10px;background:#0ea5e9;color:#fff;cursor:pointer");
+    submit.type = "submit";
+    submit.textContent = "Submit";
+    form.appendChild(submit);
+    form.addEventListener("submit", function (event) {
+      event.preventDefault();
+      const values = {};
+      Object.keys(inputs).forEach(function (key) {
+        values[key] = inputs[key].value;
+      });
+      onSubmit(values);
+    });
+    formHost.appendChild(heading);
+    formHost.appendChild(form);
+  }
+
+  function hideInlineForm() {
+    formHost.style.display = "none";
+    formHost.innerHTML = "";
+  }
+
+  function renderFeatureTools() {
+    if (!state.config) {
+      return;
+    }
+
+    const buttons = [];
+    if (state.config.callback_request && state.config.callback_request.enabled) {
+      buttons.push({
+        label: state.config.callback_request.button_label || "Request a call",
+        onClick: function () {
+          showInlineForm(
+            "Request a call",
+            [
+              { key: "name", label: "Name" },
+              { key: "phone", label: "Phone" },
+              { key: "email", label: "Email", type: "email" },
+              { key: "message", label: "Message", multiline: true }
+            ],
+            function (values) {
+              apiFetch("/lead", {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  Authorization: "Bearer " + state.token,
+                  "Idempotency-Key": "callback-" + Date.now()
+                },
+                body: JSON.stringify({
+                  name: values.name,
+                  phone: values.phone,
+                  email: values.email,
+                  data: { request_type: "callback", message: values.message }
+                })
+              }).then(function () {
+                addMessage("assistant", state.config.callback_request.success_message || "Your callback request has been sent.");
+                notifyWordPressLead(values);
+                hideInlineForm();
+              });
+            }
+          );
+        }
+      });
+    }
+
+    if (state.config.appointment_request && state.config.appointment_request.enabled) {
+      buttons.push({
+        label: state.config.appointment_request.title || "Request appointment",
+        onClick: function () {
+          showInlineForm(
+            state.config.appointment_request.title || "Request appointment",
+            [
+              { key: "name", label: "Name" },
+              { key: "email", label: "Email", type: "email" },
+              { key: "phone", label: "Phone" },
+              { key: "service", label: "Service" },
+              { key: "preferred_date", label: "Preferred date" },
+              { key: "preferred_time", label: "Preferred time" }
+            ],
+            function (values) {
+              apiFetch("/lead", {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  Authorization: "Bearer " + state.token,
+                  "Idempotency-Key": "appointment-" + Date.now()
+                },
+                body: JSON.stringify({
+                  name: values.name,
+                  phone: values.phone,
+                  email: values.email,
+                  data: {
+                    request_type: "appointment",
+                    service: values.service,
+                    preferred_date: values.preferred_date,
+                    preferred_time: values.preferred_time
+                  }
+                })
+              }).then(function () {
+                addMessage("assistant", state.config.appointment_request.success_message || "Your appointment request has been sent.");
+                notifyWordPressLead(values);
+                hideInlineForm();
+              });
+            }
+          );
+        }
+      });
+    }
+
+    if (state.config.service_area && state.config.service_area.enabled) {
+      buttons.push({
+        label: "Check service area",
+        onClick: function () {
+          showInlineForm("Check service area", [{ key: "query", label: state.config.service_area.input_label || "Enter your city or ZIP" }], function (values) {
+            apiFetch("/service-area-check", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: "Bearer " + state.token
+              },
+              body: JSON.stringify({ query: values.query })
+            }).then(function (payload) {
+              addMessage("assistant", payload.data.message);
+              hideInlineForm();
+            });
+          });
+        }
+      });
+    }
+
+    if (state.config.quote_calculator && state.config.quote_calculator.enabled) {
+      buttons.push({
+        label: state.config.quote_calculator.title || "Instant quote",
+        onClick: function () {
+          const fields = (state.config.quote_calculator.fields || []).map(function (field) {
+            return {
+              key: field.key,
+              label: field.label,
+              value: "",
+              multiline: field.field_type === "textarea"
+            };
+          });
+          showInlineForm(state.config.quote_calculator.title || "Instant quote", fields, function (values) {
+            apiFetch("/quote-calculate", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: "Bearer " + state.token
+              },
+              body: JSON.stringify({ values: values })
+            }).then(function (payload) {
+              const quote = payload.data;
+              addMessage("assistant", (state.config.quote_calculator.success_message || "Estimated quote generated.") + "\n" + quote.amount + " " + quote.currency);
+              apiFetch("/lead", {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  Authorization: "Bearer " + state.token,
+                  "Idempotency-Key": "quote-" + Date.now()
+                },
+                body: JSON.stringify({
+                  data: {
+                    request_type: "quote",
+                    amount: quote.amount,
+                    currency: quote.currency,
+                    values: values
+                  }
+                })
+              }).catch(function () {
+                return null;
+              });
+              hideInlineForm();
+            });
+          });
+        }
+      });
+    }
+
+    renderButtons(tools, buttons);
+  }
+
+  function applyConfig() {
+    if (!state.config) {
+      return;
+    }
+
+    header.textContent = state.config.widget.greeting || "Assistant";
+    launcher.textContent = "Chat";
+    launcher.style.background = state.config.branding.primary_color || "#0ea5e9";
+    send.style.background = state.config.branding.primary_color || "#0ea5e9";
+    panel.style.borderRadius = (state.config.branding.border_radius || 12) + "px";
+    panel.style.fontFamily = state.config.branding.font || "Segoe UI";
+    if (state.config.widget.position === "bottom-left") {
+      launcher.style.left = "20px";
+      launcher.style.right = "auto";
+      panel.style.left = "20px";
+      panel.style.right = "auto";
+    }
+    renderFeatureTools();
+  }
+
+  function renderRuntimeCtas(ctas) {
+    renderButtons(
+      actions,
+      (ctas || []).map(function (cta) {
+        return {
+          label: cta.label,
+          onClick: function () {
+            if (cta.kind === "callback") {
+              const button = Array.from(tools.querySelectorAll("button")).find(function (element) {
+                return element.textContent === cta.label;
+              });
+              if (button) {
+                button.click();
+              }
+              return;
+            }
+            if (cta.kind === "appointment") {
+              const button = Array.from(tools.querySelectorAll("button")).find(function (element) {
+                return element.textContent === cta.label;
+              });
+              if (button) {
+                button.click();
+              }
+              return;
+            }
+            if (cta.kind === "service-area" || cta.kind === "quote") {
+              const button = Array.from(tools.querySelectorAll("button")).find(function (element) {
+                return element.textContent === cta.label;
+              });
+              if (button) {
+                button.click();
+              }
+              return;
+            }
+            window.open(cta.url, "_blank", "noopener,noreferrer");
+          }
+        };
+      })
+    );
+  }
+
+  function submitLeadDetails(messageText) {
+    const details = {
+      name: "",
+      email: "",
+      phone: "",
+      message: messageText || ""
+    };
+    return apiFetch("/lead", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: "Bearer " + state.token,
+        "Idempotency-Key": "lead-" + Date.now()
+      },
+      body: JSON.stringify(details)
+    }).then(function () {
+      addMessage("assistant", "Thanks. Your details have been sent.");
+      return notifyWordPressLead(details);
+    });
+  }
+
+  function verifyPlugin() {
+    return fetch(apiBase + "/verify", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Idempotency-Key": "verify-" + window.WCP_CONFIG.clientId + "-" + window.WCP_CONFIG.siteUrl
+      },
+      body: JSON.stringify({
+        client_id: window.WCP_CONFIG.clientId,
+        client_secret: window.WCP_CONFIG.clientSecret,
+        domain: window.location.hostname,
+        plugin_version: window.WCP_CONFIG.pluginVersion,
+        wordpress_version: window.WCP_CONFIG.wordpressVersion,
+        php_version: window.WCP_CONFIG.phpVersion,
+        elementor_version: window.WCP_CONFIG.elementorVersion,
+        config_version: state.cachedConfigVersion
+      })
+    })
+      .then(function (response) {
+        if (!response.ok) {
+          throw new Error("Verification failed");
+        }
+        return response.json();
+      })
+      .then(function (payload) {
+        state.token = payload.data.token;
+        state.cachedConfigVersion = payload.data.config_version || state.cachedConfigVersion;
+      });
+  }
+
+  function loadConfig() {
+    if (state.cachedConfig) {
+      try {
+        state.config = JSON.parse(state.cachedConfig);
+      } catch (_error) {
+        state.cachedConfig = null;
+      }
+    }
+
+    if (state.config && state.config.config_version === state.cachedConfigVersion) {
+      applyConfig();
+      return Promise.resolve();
+    }
+
+    return fetch(apiBase + "/widget-config", {
+      headers: { Authorization: "Bearer " + state.token }
+    })
+      .then(function (response) {
+        if (!response.ok) {
+          throw new Error("Config fetch failed");
+        }
+        return response.json();
+      })
+      .then(function (payload) {
+        state.config = payload.data;
+        window.localStorage.setItem("wcp_widget_config", JSON.stringify(payload.data));
+        window.localStorage.setItem("wcp_config_version", String(payload.data.config_version || 0));
+        state.cachedConfigVersion = Number(payload.data.config_version || 0);
+        state.cachedConfig = JSON.stringify(payload.data);
+        applyConfig();
+      });
+  }
+
+  function createOrResumeSession() {
+    if (state.resumeToken) {
+      return fetch(apiBase + "/resume", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: "Bearer " + state.token
+        },
+        body: JSON.stringify({ resume_token: state.resumeToken })
+      }).then(function (resumed) {
+        if (resumed.ok) {
+          return resumed.json().then(function (payload) {
+            state.conversationId = payload.data.conversation_id;
+          });
+        }
+        return fetch(apiBase + "/session", {
+          method: "POST",
+          headers: { Authorization: "Bearer " + state.token }
+        })
+          .then(function (created) {
+            if (!created.ok) {
+              throw new Error("Session creation failed");
+            }
+            return created.json();
+          })
+          .then(function (payload) {
+            state.conversationId = payload.data.conversation_id;
+            state.resumeToken = payload.data.resume_token;
+            window.localStorage.setItem("wcp_resume_token", state.resumeToken);
+          });
+      });
+    }
+
+    return fetch(apiBase + "/session", {
+      method: "POST",
+      headers: { Authorization: "Bearer " + state.token }
+    })
+      .then(function (created) {
+        if (!created.ok) {
+          throw new Error("Session creation failed");
+        }
+        return created.json();
+      })
+      .then(function (payload) {
+        state.conversationId = payload.data.conversation_id;
+        state.resumeToken = payload.data.resume_token;
+        window.localStorage.setItem("wcp_resume_token", state.resumeToken);
+      });
+  }
+
+  function sendMessage(text) {
+    if (state.bootFailed) {
+      setUnavailableState("Chat is temporarily unavailable. Please retry in a moment.");
+      return Promise.resolve();
+    }
+    addMessage("user", text);
+    return fetch(apiBase + "/chat", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: "Bearer " + state.token
+      },
+      body: JSON.stringify({
+        conversation_id: state.conversationId,
+        message: text
+      })
+    })
+      .then(function (response) {
+        if (!response.ok) {
+          addMessage("assistant", "The assistant is temporarily unavailable.");
+          return null;
+        }
+        return response.json();
+      })
+      .then(function (payload) {
+        if (!payload) {
+          return;
+        }
+        addMessage("assistant", payload.data.message);
+        renderRuntimeCtas(payload.data.cta_options);
+      });
+  }
+
+  function boot() {
+    setComposerDisabled(false);
+    return verifyPlugin()
+      .then(loadConfig)
+      .then(createOrResumeSession)
+      .then(function () {
+        const greeting = (state.config && state.config.out_of_hours && state.config.out_of_hours.enabled && state.config.out_of_hours.greeting) || (state.config && state.config.widget && state.config.widget.greeting) || "Hi, how can I help you today?";
+        addMessage("assistant", greeting);
+        if (!state.embedded && state.config && state.config.widget && state.config.widget.auto_open) {
+          window.setTimeout(function () {
+            state.open = true;
+            panel.style.display = "flex";
+          }, state.config.widget.auto_open_delay_ms || 0);
+        }
+      })
+      .catch(function (error) {
+        console.error(error);
+        setUnavailableState("Chat is temporarily unavailable. Please try again or use the contact options on this page.");
+      });
+  }
+
+  composer.addEventListener("submit", function (event) {
+    event.preventDefault();
+    const text = input.value.trim();
+    if (!text) {
+      return;
+    }
+    input.value = "";
+    void sendMessage(text);
+  });
+
+  launcher.addEventListener("click", function () {
+    state.open = !state.open;
+    panel.style.display = state.open ? "flex" : "none";
+  });
+
+  window.addEventListener("load", function () {
+    if (!shouldRenderWidget()) {
+      return;
+    }
+
+    const embedTarget = document.querySelector("[data-wcp-embed='1']");
+    state.embedded = Boolean(embedTarget);
+    if ((window.WCP_CONFIG.displayMode === "embed" || state.embedded) && embedTarget) {
+      panel.style.position = "relative";
+      panel.style.right = "auto";
+      panel.style.bottom = "auto";
+      panel.style.width = "100%";
+      panel.style.maxWidth = "100%";
+      panel.style.display = "flex";
+      panel.style.height = "520px";
+      embedTarget.appendChild(panel);
+    } else {
+      document.body.appendChild(launcher);
+      document.body.appendChild(panel);
+    }
+
+    if (window.WCP_CONFIG.displayMode === "button" || window.WCP_CONFIG.displayMode === "popup") {
+      launcher.style.display = "none";
+      const selector = window.WCP_CONFIG.triggerSelector || "[data-wcp-trigger='1']";
+      document.querySelectorAll(selector).forEach(function (element) {
+        element.addEventListener("click", function (event) {
+          event.preventDefault();
+          state.open = true;
+          panel.style.display = "flex";
+        });
+      });
+    }
+
+    if (window.innerWidth < 640) {
+      panel.style.width = "calc(100vw - 12px)";
+      panel.style.height = "calc(100vh - 24px)";
+      panel.style.bottom = "12px";
+      panel.style.right = "6px";
+      panel.style.left = "6px";
+      launcher.style.bottom = "max(16px, env(safe-area-inset-bottom))";
+    }
+
+    void boot();
+    window.setInterval(function () {
+      if (!state.token) {
+        return;
+      }
+      void fetch(apiBase + "/heartbeat", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: "Bearer " + state.token
+        },
+        body: JSON.stringify({
+          client_id: window.WCP_CONFIG.clientId,
+          domain: window.location.hostname,
+          plugin_version: window.WCP_CONFIG.pluginVersion,
+          wordpress_version: window.WCP_CONFIG.wordpressVersion,
+          php_version: window.WCP_CONFIG.phpVersion,
+          elementor_version: window.WCP_CONFIG.elementorVersion
+        })
+      }).catch(function () {
+        return null;
+      });
+    }, 12 * 60 * 60 * 1000);
+  });
+})();

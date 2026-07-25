@@ -1,0 +1,795 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum LicenseStatus {
+  trial
+  active
+  expired
+  suspended
+  cancelled
+}
+
+enum KnowledgeEntryType {
+  company
+  services
+  pricing
+  faq
+  team
+  hours
+  locations
+  contact
+  policies
+}
+
+enum LogType {
+  API
+  ERROR
+  AUDIT
+  EMAIL
+  SECURITY
+}
+
+enum PlatformRole {
+  platform_owner
+  platform_admin
+}
+
+enum ClientRole {
+  owner
+  admin
+  editor
+  viewer
+  support
+}
+
+model Client {
+  id                  String                @id @default(dbgenerated("app_uuid_v7()"))
+  name                String
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime              @updatedAt
+  settings            ClientSettings?
+  branding            BrandingSettings?
+  widgetSettings      WidgetSettings?
+  internalSettings    InternalSettings?
+  aiSettings          AiSettings?
+  featureFlags        FeatureFlag[]
+  entitlements        ClientEntitlement[]
+  clientUsers         ClientUser[]
+  licenses            License[]
+  allowedDomains      AllowedDomain[]
+  apiCredentials      ApiCredential[]
+  knowledgeEntries    KnowledgeEntry[]
+  pluginInstallations PluginInstallation[]
+  conversations       Conversation[]
+  leads               Lead[]
+  logs                Log[]
+  ctaConfigs          CtaConfig[]
+  configVersions      ConfigVersion[]
+  analyticsEvents     AnalyticsEvent[]
+  dailyAnalytics      DailyAnalytics[]
+  unansweredQuestions UnansweredQuestion[]
+  visitorProfiles     VisitorProfile[]
+  sessionTokens       SessionToken[]
+  inviteTokens        InviteToken[]
+  emailEvents         EmailEvent[]
+  businessHours       BusinessHoursConfig?
+  outOfHours          OutOfHoursConfig?
+  callbackConfig      CallbackRequestConfig?
+  appointmentConfig   AppointmentRequestConfig?
+  serviceAreaConfig   ServiceAreaConfig?
+  serviceAreaRules    ServiceAreaRule[]
+  priceListItems      PriceListItem[]
+  quoteConfig         QuoteCalculatorConfig?
+  quoteFields         QuoteCalculatorField[]
+  leadQualification   LeadQualificationConfig?
+  missedAlertConfig   MissedCustomerAlertConfig?
+  emergencyDetection  EmergencyDetectionConfig?
+  captchaConfig       CaptchaConfig?
+  faqSuggestions      FaqSuggestion[]
+  callbackRequests    CallbackRequest[]
+  appointmentRequests AppointmentRequest[]
+  serviceAreaChecks   ServiceAreaCheck[]
+  quoteRequests       QuoteRequest[]
+  missedAlerts        MissedCustomerAlert[]
+}
+
+model ClientSettings {
+  id             String   @id @default(dbgenerated("app_uuid_v7()"))
+  clientId       String   @unique
+  timezone       String
+  defaultCountry String
+  language       String
+  dateFormat     String
+  currency       String
+  version        Int      @default(1)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  client         Client   @relation(fields: [clientId], references: [id], onDelete: Restrict)
+}
+
+model User {
+  id          String       @id @default(dbgenerated("app_uuid_v7()"))
+  email       String       @unique
+  passwordHash String?
+  deletedAt   DateTime?
+  deletedBy   String?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  memberships ClientUser[]
+  platformUser PlatformUser?
+  passwordResetTokens PasswordResetToken[]
+}
+
+model PlatformUser {
+  id        String       @id @default(dbgenerated("app_uuid_v7()"))
+  userId    String       @unique
+  role      PlatformRole
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+  user      User         @relation(fields: [userId], references: [id], onDelete: Restrict)
+}
+
+model ClientUser {
+  id        String     @id @default(dbgenerated("app_uuid_v7()"))
+  clientId  String
+  userId    String
+  role      ClientRole
+  version   Int        @default(1)
+  deletedAt DateTime?
+  deletedBy String?
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  client    Client     @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  user      User       @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@unique([clientId, userId])
+}
+
+model License {
+  id        String        @id @default(dbgenerated("app_uuid_v7()"))
+  clientId  String
+  status    LicenseStatus
+  startsAt  DateTime?
+  expiresAt DateTime?
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+  client    Client        @relation(fields: [clientId], references: [id], onDelete: Restrict)
+}
+
+model AllowedDomain {
+  id        String   @id @default(dbgenerated("app_uuid_v7()"))
+  clientId  String
+  domain    String
+  deletedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  client    Client   @relation(fields: [clientId], references: [id], onDelete: Restrict)
+
+  @@unique([clientId, domain])
+}
+
+model ApiCredential {
+  id             String   @id @default(dbgenerated("app_uuid_v7()"))
+  clientId       String
+  credentialType String
+  encryptedValue String
+  keyVersion     String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  client         Client   @relation(fields: [clientId], references: [id], onDelete: Restrict)
+}
+
+model PluginInstallation {
+  id               String   @id @default(dbgenerated("app_uuid_v7()"))
+  clientId         String
+  domain           String
+  pluginVersion    String
+  wordpressVersion String?
+  phpVersion       String?
+  elementorVersion String?
+  lastSeen         DateTime?
+  version          Int      @default(1)
+  deletedAt        DateTime?
+  deletedBy        String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  client           Client   @relation(fields: [clientId], references: [id], onDelete: Restrict)
+
+  @@unique([clientId, domain])
+}
+
+model BrandingSettings {
+  id             String   @id @default(dbgenerated("app_uuid_v7()"))
+  clientId       String   @unique
+  logoUrl        String?
+  avatarUrl      String?
+  launcherIconUrl String?
+  primaryColor   String
+  secondaryColor String
+  borderRadius   Int
+  font           String
+  headerStyle    String
+  version        Int      @default(1)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  client         Client   @relation(fields: [clientId], references: [id], onDelete: Restrict)
+}
+
+model WidgetSettings {
+  id                     String   @id @default(dbgenerated("app_uuid_v7()"))
+  clientId               String   @unique
+  position               String
+  greeting               String
+  autoOpen               Boolean  @default(false)
+  autoOpenDelayMs        Int      @default(0)
+  hideForLoggedInUsers   Boolean  @default(false)
+  version                Int      @default(1)
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+  client                 Client   @relation(fields: [clientId], references: [id], onDelete: Restrict)
+}
+
+model InternalSettings {
+  id                   String   @id @default(dbgenerated("app_uuid_v7()"))
+  clientId             String   @unique
+  openRouterApiKey     String?
+  fallbackModel        String?
+  adminNotes           String?
+  version              Int      @default(1)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+  client               Client   @relation(fields: [clientId], references: [id], onDelete: Restrict)
+}
+
+model AiSettings {
+  id                String   @id @default(dbgenerated("app_uuid_v7()"))
+  clientId          String   @unique
+  primaryModel      String
+  systemInstructions String?
+  version           Int      @default(1)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  client            Client   @relation(fields: [clientId], references: [id], onDelete: Restrict)
+}
+
+model FeatureFlag {
+  id        String   @id @default(dbgenerated("app_uuid_v7()"))
+  clientId  String
+  key       String
+  enabled   Boolean  @default(false)
+  version   Int      @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  client    Client   @relation(fields: [clientId], references: [id], onDelete: Restrict)
+
+  @@unique([clientId, key])
+}
+
+model ClientEntitlement {
+  id        String   @id @default(dbgenerated("app_uuid_v7()"))
+  clientId  String
+  key       String
+  allowed   Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  client    Client   @relation(fields: [clientId], references: [id], onDelete: Restrict)
+
+  @@unique([clientId, key])
+}
+
+model PlatformCapability {
+  id          String   @id @default(dbgenerated("app_uuid_v7()"))
+  key         String   @unique
+  description String?
+  enabled     Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model CtaConfig {
+  id        String   @id @default(dbgenerated("app_uuid_v7()"))
+  clientId  String
+  label     String
+  kind      String
+  url       String
+  version   Int      @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  client    Client   @relation(fields: [clientId], references: [id], onDelete: Restrict)
+
+  @@index([clientId])
+}
+
+model KnowledgeEntry {
+  id        String             @id @default(dbgenerated("app_uuid_v7()"))
+  clientId  String
+  type      KnowledgeEntryType
+  title     String
+  content   Json
+  sortOrder Int                @default(0)
+  enabled   Boolean            @default(true)
+  version   Int                @default(1)
+  deletedAt DateTime?
+  deletedBy String?
+  createdAt DateTime           @default(now())
+  updatedAt DateTime           @updatedAt
+  client    Client             @relation(fields: [clientId], references: [id], onDelete: Restrict)
+}
+
+model ConfigVersion {
+  id            String   @id @default(dbgenerated("app_uuid_v7()"))
+  clientId      String
+  versionNumber Int
+  snapshot      Json
+  createdAt     DateTime @default(now())
+  client        Client   @relation(fields: [clientId], references: [id], onDelete: Restrict)
+
+  @@unique([clientId, versionNumber])
+}
+
+model Conversation {
+  id           String   @id @default(dbgenerated("app_uuid_v7()"))
+  clientId     String
+  domain       String
+  status       String
+  startedAt    DateTime @default(now())
+  lastSeenAt   DateTime @default(now())
+  messages     Message[]
+  summary      ConversationSummary?
+  client       Client   @relation(fields: [clientId], references: [id], onDelete: Restrict)
+}
+
+model Message {
+  id             String       @id @default(dbgenerated("app_uuid_v7()"))
+  conversationId String
+  role           String
+  body           String
+  createdAt      DateTime     @default(now())
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+}
+
+model ConversationSummary {
+  id             String       @id @default(dbgenerated("app_uuid_v7()"))
+  conversationId String       @unique
+  summary        String
+  updatedAt      DateTime     @updatedAt
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+}
+
+model SessionToken {
+  id        String   @id @default(dbgenerated("app_uuid_v7()"))
+  clientId  String
+  tokenHash String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  client    Client   @relation(fields: [clientId], references: [id], onDelete: Restrict)
+}
+
+model VisitorProfile {
+  id              String   @id @default(dbgenerated("app_uuid_v7()"))
+  clientId        String
+  resumeTokenHash String   @unique
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  client          Client   @relation(fields: [clientId], references: [id], onDelete: Restrict)
+}
+
+model Lead {
+  id          String   @id @default(dbgenerated("app_uuid_v7()"))
+  clientId    String
+  name        String?
+  email       String?
+  phone       String?
+  status      String
+  payload     Json?
+  deletedAt   DateTime?
+  deletedBy   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  client      Client   @relation(fields: [clientId], references: [id], onDelete: Restrict)
+}
+
+model AnalyticsEvent {
+  id        String   @id @default(dbgenerated("app_uuid_v7()"))
+  clientId  String
+  eventType String
+  payload   Json?
+  createdAt DateTime @default(now())
+  client    Client   @relation(fields: [clientId], references: [id], onDelete: Restrict)
+}
+
+model DailyAnalytics {
+  id         String   @id @default(dbgenerated("app_uuid_v7()"))
+  clientId   String
+  day        DateTime
+  metrics    Json
+  createdAt  DateTime @default(now())
+  client     Client   @relation(fields: [clientId], references: [id], onDelete: Restrict)
+
+  @@unique([clientId, day])
+}
+
+model UnansweredQuestion {
+  id                 String   @id @default(dbgenerated("app_uuid_v7()"))
+  clientId           String
+  normalizedQuestion String
+  frequency          Int      @default(1)
+  status             String   @default("open")
+  lastAskedAt        DateTime @default(now())
+  client             Client   @relation(fields: [clientId], references: [id], onDelete: Restrict)
+}
+
+model Log {
+  id        String   @id @default(dbgenerated("app_uuid_v7()"))
+  clientId  String?
+  type      LogType
+  severity  String
+  source    String
+  requestId String?
+  payload   Json?
+  createdAt DateTime @default(now())
+  client    Client?  @relation(fields: [clientId], references: [id], onDelete: SetNull)
+}
+
+model PluginRelease {
+  id             String   @id @default(dbgenerated("app_uuid_v7()"))
+  version        String   @unique
+  downloadUrl    String
+  releaseNotes   String?
+  releasedAt     DateTime @default(now())
+}
+
+model EmailEvent {
+  id          String   @id @default(dbgenerated("app_uuid_v7()"))
+  clientId    String?
+  provider    String
+  templateKey String
+  status      String
+  createdAt   DateTime @default(now())
+  client      Client?  @relation(fields: [clientId], references: [id], onDelete: SetNull)
+}
+
+model IdempotencyKey {
+  id          String   @id @default(dbgenerated("app_uuid_v7()"))
+  scope       String
+  keyHash     String
+  response    Json?
+  createdAt   DateTime @default(now())
+
+  @@unique([scope, keyHash])
+}
+
+model EncryptionKey {
+  id          String   @id @default(dbgenerated("app_uuid_v7()"))
+  keyId       String   @unique
+  status      String
+  createdAt   DateTime @default(now())
+}
+
+model InviteToken {
+  id             String   @id @default(dbgenerated("app_uuid_v7()"))
+  clientId       String
+  email          String
+  tokenHash      String   @unique
+  invitedByUserId String?
+  expiresAt      DateTime
+  acceptedAt     DateTime?
+  createdAt      DateTime @default(now())
+  client         Client   @relation(fields: [clientId], references: [id], onDelete: Restrict)
+}
+
+model PasswordResetToken {
+  id        String   @id @default(dbgenerated("app_uuid_v7()"))
+  userId    String
+  tokenHash String   @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Restrict)
+}
+
+model BusinessHoursConfig {
+  id        String   @id @default(dbgenerated("app_uuid_v7()"))
+  clientId  String   @unique
+  enabled   Boolean  @default(false)
+  timezone  String?
+  schedule  Json
+  notes     String?
+  version   Int      @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  client    Client   @relation(fields: [clientId], references: [id], onDelete: Restrict)
+}
+
+model OutOfHoursConfig {
+  id              String   @id @default(dbgenerated("app_uuid_v7()"))
+  clientId        String   @unique
+  enabled         Boolean  @default(false)
+  greeting        String?
+  limitedCtas     Json?
+  formFirstMode   Boolean  @default(false)
+  visitorMessage  String?
+  version         Int      @default(1)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  client          Client   @relation(fields: [clientId], references: [id], onDelete: Restrict)
+}
+
+model CallbackRequestConfig {
+  id             String   @id @default(dbgenerated("app_uuid_v7()"))
+  clientId       String   @unique
+  enabled        Boolean  @default(false)
+  buttonLabel    String
+  helperText     String?
+  successMessage String?
+  requiredFields Json?
+  version        Int      @default(1)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  client         Client   @relation(fields: [clientId], references: [id], onDelete: Restrict)
+}
+
+model AppointmentRequestConfig {
+  id             String   @id @default(dbgenerated("app_uuid_v7()"))
+  clientId       String   @unique
+  enabled        Boolean  @default(false)
+  title          String
+  description    String?
+  requiredFields Json?
+  successMessage String?
+  version        Int      @default(1)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  client         Client   @relation(fields: [clientId], references: [id], onDelete: Restrict)
+}
+
+model ServiceAreaConfig {
+  id             String   @id @default(dbgenerated("app_uuid_v7()"))
+  clientId       String   @unique
+  enabled        Boolean  @default(false)
+  mode           String
+  inputLabel     String?
+  successMessage String?
+  failureMessage String?
+  version        Int      @default(1)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  client         Client   @relation(fields: [clientId], references: [id], onDelete: Restrict)
+}
+
+model ServiceAreaRule {
+  id         String   @id @default(dbgenerated("app_uuid_v7()"))
+  clientId   String
+  ruleType   String
+  label      String
+  value      String
+  enabled    Boolean  @default(true)
+  version    Int      @default(1)
+  deletedAt  DateTime?
+  deletedBy  String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  client     Client   @relation(fields: [clientId], references: [id], onDelete: Restrict)
+
+  @@index([clientId, ruleType])
+}
+
+model PriceListItem {
+  id          String   @id @default(dbgenerated("app_uuid_v7()"))
+  clientId    String
+  category    String
+  name        String
+  description String?
+  price       Float?
+  currency    String?
+  enabled     Boolean  @default(true)
+  sortOrder   Int      @default(0)
+  version     Int      @default(1)
+  deletedAt   DateTime?
+  deletedBy   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  client      Client   @relation(fields: [clientId], references: [id], onDelete: Restrict)
+
+  @@index([clientId, category])
+}
+
+model QuoteCalculatorConfig {
+  id             String   @id @default(dbgenerated("app_uuid_v7()"))
+  clientId       String   @unique
+  enabled        Boolean  @default(false)
+  title          String
+  description    String?
+  successMessage String?
+  baseAmount     Float    @default(0)
+  currency       String?
+  version        Int      @default(1)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  client         Client   @relation(fields: [clientId], references: [id], onDelete: Restrict)
+}
+
+model QuoteCalculatorField {
+  id          String   @id @default(dbgenerated("app_uuid_v7()"))
+  clientId    String
+  key         String
+  label       String
+  fieldType   String
+  required    Boolean  @default(false)
+  options     Json?
+  multiplier  Float    @default(1)
+  sortOrder   Int      @default(0)
+  version     Int      @default(1)
+  deletedAt   DateTime?
+  deletedBy   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  client      Client   @relation(fields: [clientId], references: [id], onDelete: Restrict)
+
+  @@unique([clientId, key])
+}
+
+model LeadQualificationConfig {
+  id             String   @id @default(dbgenerated("app_uuid_v7()"))
+  clientId       String   @unique
+  enabled        Boolean  @default(false)
+  stages         Json
+  requiredFields Json
+  scoringRules   Json?
+  successMessage String?
+  version        Int      @default(1)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  client         Client   @relation(fields: [clientId], references: [id], onDelete: Restrict)
+}
+
+model MissedCustomerAlertConfig {
+  id                      String   @id @default(dbgenerated("app_uuid_v7()"))
+  clientId                String   @unique
+  enabled                 Boolean  @default(false)
+  conversationDelayMins   Int      @default(30)
+  leadDelayMins           Int      @default(60)
+  notifyPlatformEmail     Boolean  @default(true)
+  notifyWordPressEmail    Boolean  @default(false)
+  version                 Int      @default(1)
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+  client                  Client   @relation(fields: [clientId], references: [id], onDelete: Restrict)
+}
+
+model EmergencyDetectionConfig {
+  id               String   @id @default(dbgenerated("app_uuid_v7()"))
+  clientId         String   @unique
+  enabled          Boolean  @default(false)
+  keywords         Json
+  responseMessage  String
+  escalateLabel    String?
+  version          Int      @default(1)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  client           Client   @relation(fields: [clientId], references: [id], onDelete: Restrict)
+}
+
+model CaptchaConfig {
+  id                 String   @id @default(dbgenerated("app_uuid_v7()"))
+  clientId           String   @unique
+  provider           String   @default("disabled")
+  siteKey            String?
+  secretKeyEncrypted String?
+  protectLead        Boolean  @default(false)
+  protectCallback    Boolean  @default(false)
+  protectAppointment Boolean  @default(false)
+  protectQuote       Boolean  @default(false)
+  protectChat        Boolean  @default(false)
+  minScore           Float?
+  version            Int      @default(1)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  client             Client   @relation(fields: [clientId], references: [id], onDelete: Restrict)
+}
+
+model FaqSuggestion {
+  id                 String   @id @default(dbgenerated("app_uuid_v7()"))
+  clientId           String
+  normalizedQuestion String
+  suggestedAnswer    String?
+  status             String   @default("open")
+  frequency          Int      @default(1)
+  version            Int      @default(1)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  client             Client   @relation(fields: [clientId], references: [id], onDelete: Restrict)
+
+  @@index([clientId, status])
+}
+
+model CallbackRequest {
+  id             String   @id @default(dbgenerated("app_uuid_v7()"))
+  clientId       String
+  conversationId String?
+  name           String?
+  email          String?
+  phone          String?
+  message        String?
+  status         String   @default("new")
+  payload        Json?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  client         Client   @relation(fields: [clientId], references: [id], onDelete: Restrict)
+
+  @@index([clientId, status])
+}
+
+model AppointmentRequest {
+  id             String   @id @default(dbgenerated("app_uuid_v7()"))
+  clientId       String
+  conversationId String?
+  name           String?
+  email          String?
+  phone          String?
+  service        String?
+  preferredDate  String?
+  preferredTime  String?
+  message        String?
+  status         String   @default("new")
+  payload        Json?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  client         Client   @relation(fields: [clientId], references: [id], onDelete: Restrict)
+
+  @@index([clientId, status])
+}
+
+model ServiceAreaCheck {
+  id            String   @id @default(dbgenerated("app_uuid_v7()"))
+  clientId      String
+  query         String
+  result        String
+  matchedRuleId String?
+  payload       Json?
+  createdAt     DateTime @default(now())
+  client        Client   @relation(fields: [clientId], references: [id], onDelete: Restrict)
+
+  @@index([clientId, result])
+}
+
+model QuoteRequest {
+  id             String   @id @default(dbgenerated("app_uuid_v7()"))
+  clientId       String
+  conversationId String?
+  name           String?
+  email          String?
+  phone          String?
+  amount         Float?
+  currency       String?
+  status         String   @default("new")
+  payload        Json?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  client         Client   @relation(fields: [clientId], references: [id], onDelete: Restrict)
+
+  @@index([clientId, status])
+}
+
+model MissedCustomerAlert {
+  id             String   @id @default(dbgenerated("app_uuid_v7()"))
+  clientId       String
+  conversationId String?
+  leadId         String?
+  reason         String
+  status         String   @default("open")
+  payload        Json?
+  notifiedAt     DateTime?
+  resolvedAt     DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  client         Client   @relation(fields: [clientId], references: [id], onDelete: Restrict)
+
+  @@index([clientId, status])
+}

@@ -1,0 +1,16 @@
+{
+  "name": "wordpress-chatbot-platform",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces",
+    "dev": "npm run dev -w @platform/api",
+    "lint": "npm run lint --workspaces",
+    "test": "npm run test --workspaces",
+    "test:e2e": "npm run test:e2e -w @platform/api"
+  }
+}
