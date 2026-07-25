@@ -15,6 +15,12 @@ if (!defined('ABSPATH')) {
 
 define('WCP_PLUGIN_VERSION', '0.1.0');
 define('WCP_OPTION_KEY', 'wcp_connector_settings');
+define('WCP_HEARTBEAT_HOOK', 'wcp_server_heartbeat');
+
+function wcp_get_site_domain(): string
+{
+    return (string) (wp_parse_url(home_url('/'), PHP_URL_HOST) ?: '');
+}
 
 function wcp_get_settings(): array
 {
@@ -151,6 +157,7 @@ function wcp_enqueue_assets(): void
         'clientId' => sanitize_text_field($settings['client_id']),
         'pluginVersion' => WCP_PLUGIN_VERSION,
         'siteUrl' => home_url('/'),
+        'siteHost' => wcp_get_site_domain(),
         'wordpressVersion' => get_bloginfo('version'),
         'phpVersion' => PHP_VERSION,
         'elementorVersion' => defined('ELEMENTOR_VERSION') ? ELEMENTOR_VERSION : '',
@@ -230,7 +237,7 @@ function wcp_enforce_request_size(int $maxBytes): bool
 function wcp_verify_backend_session()
 {
     $settings = wcp_get_settings();
-    $domain = wp_parse_url(home_url('/'), PHP_URL_HOST) ?: '';
+    $domain = wcp_get_site_domain();
     if (!$domain) {
         return new WP_Error('wcp_invalid_domain', 'Site domain could not be determined.');
     }
@@ -266,6 +273,47 @@ function wcp_verify_backend_session()
 
     return $data;
 }
+
+function wcp_send_server_heartbeat(): void
+{
+    $verification = wcp_verify_backend_session();
+    if (is_wp_error($verification) || empty($verification['token'])) {
+        return;
+    }
+
+    $settings = wcp_get_settings();
+    $domain = wcp_get_site_domain();
+    if (!$domain) {
+        return;
+    }
+
+    wcp_backend_request('/heartbeat', [
+        'client_id' => sanitize_text_field((string) $settings['client_id']),
+        'domain' => $domain,
+        'plugin_version' => WCP_PLUGIN_VERSION,
+        'wordpress_version' => get_bloginfo('version'),
+        'php_version' => PHP_VERSION,
+        'elementor_version' => defined('ELEMENTOR_VERSION') ? ELEMENTOR_VERSION : '',
+    ], [
+        'Authorization' => 'Bearer ' . $verification['token'],
+    ]);
+}
+
+function wcp_schedule_heartbeat(): void
+{
+    if (!wp_next_scheduled(WCP_HEARTBEAT_HOOK)) {
+        wp_schedule_event(time() + HOUR_IN_SECONDS, 'twicedaily', WCP_HEARTBEAT_HOOK);
+    }
+}
+
+register_activation_hook(__FILE__, 'wcp_schedule_heartbeat');
+
+register_deactivation_hook(__FILE__, function (): void {
+    wp_clear_scheduled_hook(WCP_HEARTBEAT_HOOK);
+});
+
+add_action('init', 'wcp_schedule_heartbeat');
+add_action(WCP_HEARTBEAT_HOOK, 'wcp_send_server_heartbeat');
 
 function wcp_render_shortcode(): string
 {
@@ -382,12 +430,13 @@ function wcp_bootstrap_plugin(): void
 add_action('wp_ajax_wcp_bootstrap_plugin', 'wcp_bootstrap_plugin');
 add_action('wp_ajax_nopriv_wcp_bootstrap_plugin', 'wcp_bootstrap_plugin');
 
-if (did_action('elementor/loaded')) {
-    add_action('elementor/widgets/register', function ($widgets_manager) {
-        if (!class_exists('\\Elementor\\Widget_Base')) {
-            return;
-        }
+function wcp_register_elementor_widget($widgets_manager): void
+{
+    if (!class_exists('\\Elementor\\Widget_Base')) {
+        return;
+    }
 
+    if (!class_exists('WCP_Elementor_Chatbot_Widget')) {
         class WCP_Elementor_Chatbot_Widget extends \Elementor\Widget_Base
         {
             public function get_name(): string
@@ -423,11 +472,12 @@ if (did_action('elementor/loaded')) {
                     'options' => [
                         'embed' => 'Embed',
                         'button' => 'Button Trigger',
+                        'popup' => 'Popup Trigger',
                     ],
                 ]);
 
                 $this->add_control('button_label', [
-                    'label' => 'Button Label',
+                    'label' => 'Trigger Label',
                     'type' => \Elementor\Controls_Manager::TEXT,
                     'default' => 'Open Chat',
                 ]);
@@ -438,7 +488,8 @@ if (did_action('elementor/loaded')) {
             protected function render(): void
             {
                 $settings = $this->get_settings_for_display();
-                if (($settings['mode'] ?? 'embed') === 'button') {
+                $mode = (string) ($settings['mode'] ?? 'embed');
+                if ($mode === 'button' || $mode === 'popup') {
                     echo do_shortcode('[wcp_chatbot_trigger label="' . esc_attr((string) ($settings['button_label'] ?? 'Open Chat')) . '"]');
                     return;
                 }
@@ -446,7 +497,9 @@ if (did_action('elementor/loaded')) {
                 echo do_shortcode('[wcp_chatbot]');
             }
         }
+    }
 
-        $widgets_manager->register(new WCP_Elementor_Chatbot_Widget());
-    });
+    $widgets_manager->register(new WCP_Elementor_Chatbot_Widget());
 }
+
+add_action('elementor/widgets/register', 'wcp_register_elementor_widget');

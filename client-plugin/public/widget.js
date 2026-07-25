@@ -3,16 +3,44 @@
     return;
   }
 
+  const storagePrefix = ["wcp", window.WCP_CONFIG.clientId, window.WCP_CONFIG.siteHost || window.location.hostname].join(":");
+
+  function storageKey(name) {
+    return storagePrefix + ":" + name;
+  }
+
+  function loadStorage(name) {
+    try {
+      return window.localStorage.getItem(storageKey(name));
+    } catch (_error) {
+      return null;
+    }
+  }
+
+  function saveStorage(name, value) {
+    try {
+      if (value == null || value === "") {
+        window.localStorage.removeItem(storageKey(name));
+        return;
+      }
+      window.localStorage.setItem(storageKey(name), String(value));
+    } catch (_error) {
+      return;
+    }
+  }
+
   const state = {
     token: null,
+    bootstrapPromise: null,
     conversationId: null,
-    resumeToken: window.localStorage.getItem("wcp_resume_token"),
-    cachedConfigVersion: Number(window.localStorage.getItem("wcp_config_version") || 0),
-    cachedConfig: window.localStorage.getItem("wcp_widget_config"),
+    resumeToken: loadStorage("resume_token"),
+    cachedConfigVersion: Number(loadStorage("config_version") || 0),
+    cachedConfig: loadStorage("widget_config"),
     config: null,
     open: false,
     embedded: false,
     bootFailed: false,
+    isPopupMode: false,
     scriptPromises: {},
     turnstileWidgetId: null
   };
@@ -59,6 +87,7 @@
   launcher.type = "button";
   launcher.textContent = "Chat";
 
+  const backdrop = createBox("div", "position:fixed;inset:0;background:rgba(2,6,23,.62);display:none;z-index:9998");
   const panel = createBox("div", "position:fixed;right:20px;bottom:78px;width:360px;max-width:calc(100vw - 24px);height:560px;background:#111827;color:#fff;border:1px solid rgba(255,255,255,.12);border-radius:14px;display:none;flex-direction:column;overflow:hidden;z-index:9999;box-shadow:0 18px 60px rgba(0,0,0,.35)");
   const header = createBox("div", "padding:14px 16px;background:#0f172a;font-weight:600");
   const messages = createBox("div", "flex:1;overflow:auto;padding:12px;display:flex;flex-direction:column;gap:10px");
@@ -133,6 +162,15 @@
     ]);
   }
 
+  function setPanelVisibility(open) {
+    state.open = open;
+    panel.style.display = open ? "flex" : "none";
+    if (state.isPopupMode) {
+      backdrop.style.display = open ? "block" : "none";
+      document.body.style.overflow = open ? "hidden" : "";
+    }
+  }
+
   function renderButtons(container, buttons) {
     container.innerHTML = "";
     if (!buttons.length) {
@@ -186,11 +224,34 @@
     return fetch(apiBase + path, init).then(function (response) {
       return response.json().then(function (payload) {
         if (!response.ok) {
-          throw new Error((payload.error && payload.error.message) || "Request failed");
+          const error = new Error((payload.error && payload.error.message) || "Request failed");
+          error.status = response.status;
+          throw error;
         }
         return payload;
       });
     });
+  }
+
+  function fetchWithPluginAuth(path, init, retryOnUnauthorized) {
+    const request = Object.assign({}, init || {});
+    request.headers = Object.assign({}, request.headers || {}, {
+      Authorization: "Bearer " + state.token
+    });
+
+    return fetch(apiBase + path, request).then(function (response) {
+      if (response.status === 401 && retryOnUnauthorized !== false) {
+        return refreshPluginToken().then(function () {
+          return fetchWithPluginAuth(path, init, false);
+        });
+      }
+      return response;
+    });
+  }
+
+  function refreshPluginToken() {
+    state.token = null;
+    return bootstrapPlugin().then(loadConfig);
   }
 
   function getCaptchaConfig(interaction) {
@@ -406,17 +467,26 @@
         label: "Check service area",
         onClick: function () {
           showInlineForm("Check service area", [{ key: "query", label: state.config.service_area.input_label || "Enter your city or ZIP" }], function (values) {
-            apiFetch("/service-area-check", {
+            fetchWithPluginAuth("/service-area-check", {
               method: "POST",
               headers: {
-                "Content-Type": "application/json",
-                Authorization: "Bearer " + state.token
+                "Content-Type": "application/json"
               },
               body: JSON.stringify({ query: values.query })
-            }).then(function (payload) {
-              addMessage("assistant", payload.data.message);
-              hideInlineForm();
-            });
+            })
+              .then(function (response) {
+                if (!response.ok) {
+                  throw new Error("Service area check failed.");
+                }
+                return response.json();
+              })
+              .then(function (payload) {
+                addMessage("assistant", payload.data.message);
+                hideInlineForm();
+              })
+              .catch(function (error) {
+                addMessage("assistant", error.message || "Service area check failed.");
+              });
           });
         }
       });
@@ -437,14 +507,19 @@
           showInlineForm(state.config.quote_calculator.title || "Instant quote", fields, function (values) {
             getCaptchaToken("quote")
               .then(function (captchaToken) {
-                return apiFetch("/quote-calculate", {
+                return fetchWithPluginAuth("/quote-calculate", {
                   method: "POST",
                   headers: {
-                    "Content-Type": "application/json",
-                    Authorization: "Bearer " + state.token
+                    "Content-Type": "application/json"
                   },
                   body: JSON.stringify({ values: values, captcha_token: captchaToken })
                 });
+              })
+              .then(function (response) {
+                if (!response.ok) {
+                  throw new Error("Quote calculation failed.");
+                }
+                return response.json();
               })
               .then(function (payload) {
                 const quote = payload.data;
@@ -556,10 +631,20 @@
   }
 
   function bootstrapPlugin() {
-    return wordpressAjax("wcp_bootstrap_plugin", {}).then(function (payload) {
-      state.token = payload.data.token;
-      state.cachedConfigVersion = payload.data.config_version || state.cachedConfigVersion;
-    });
+    if (state.bootstrapPromise) {
+      return state.bootstrapPromise;
+    }
+
+    state.bootstrapPromise = wordpressAjax("wcp_bootstrap_plugin", {})
+      .then(function (payload) {
+        state.token = payload.data.token;
+        state.cachedConfigVersion = payload.data.config_version || state.cachedConfigVersion;
+      })
+      .finally(function () {
+        state.bootstrapPromise = null;
+      });
+
+    return state.bootstrapPromise;
   }
 
   function loadConfig() {
@@ -576,9 +661,7 @@
       return Promise.resolve();
     }
 
-    return fetch(apiBase + "/widget-config", {
-      headers: { Authorization: "Bearer " + state.token }
-    })
+    return fetchWithPluginAuth("/widget-config", {})
       .then(function (response) {
         if (!response.ok) {
           throw new Error("Config fetch failed");
@@ -587,8 +670,8 @@
       })
       .then(function (payload) {
         state.config = payload.data;
-        window.localStorage.setItem("wcp_widget_config", JSON.stringify(payload.data));
-        window.localStorage.setItem("wcp_config_version", String(payload.data.config_version || 0));
+        saveStorage("widget_config", JSON.stringify(payload.data));
+        saveStorage("config_version", String(payload.data.config_version || 0));
         state.cachedConfigVersion = Number(payload.data.config_version || 0);
         state.cachedConfig = JSON.stringify(payload.data);
         applyConfig();
@@ -597,11 +680,10 @@
 
   function createOrResumeSession() {
     if (state.resumeToken) {
-      return fetch(apiBase + "/resume", {
+      return fetchWithPluginAuth("/resume", {
         method: "POST",
         headers: {
-          "Content-Type": "application/json",
-          Authorization: "Bearer " + state.token
+          "Content-Type": "application/json"
         },
         body: JSON.stringify({ resume_token: state.resumeToken })
       }).then(function (resumed) {
@@ -610,9 +692,9 @@
             state.conversationId = payload.data.conversation_id;
           });
         }
-        return fetch(apiBase + "/session", {
+        return fetchWithPluginAuth("/session", {
           method: "POST",
-          headers: { Authorization: "Bearer " + state.token }
+          headers: {}
         })
           .then(function (created) {
             if (!created.ok) {
@@ -623,14 +705,14 @@
           .then(function (payload) {
             state.conversationId = payload.data.conversation_id;
             state.resumeToken = payload.data.resume_token;
-            window.localStorage.setItem("wcp_resume_token", state.resumeToken);
+            saveStorage("resume_token", state.resumeToken);
           });
       });
     }
 
-    return fetch(apiBase + "/session", {
+    return fetchWithPluginAuth("/session", {
       method: "POST",
-      headers: { Authorization: "Bearer " + state.token }
+      headers: {}
     })
       .then(function (created) {
         if (!created.ok) {
@@ -641,7 +723,7 @@
       .then(function (payload) {
         state.conversationId = payload.data.conversation_id;
         state.resumeToken = payload.data.resume_token;
-        window.localStorage.setItem("wcp_resume_token", state.resumeToken);
+        saveStorage("resume_token", state.resumeToken);
       });
   }
 
@@ -653,11 +735,10 @@
     addMessage("user", text);
     return getCaptchaToken("chat")
       .then(function (captchaToken) {
-        return fetch(apiBase + "/chat", {
+        return fetchWithPluginAuth("/chat", {
           method: "POST",
           headers: {
-            "Content-Type": "application/json",
-            Authorization: "Bearer " + state.token
+            "Content-Type": "application/json"
           },
           body: JSON.stringify({
             conversation_id: state.conversationId,
@@ -697,8 +778,7 @@
         addMessage("assistant", greeting);
         if (!state.embedded && state.config && state.config.widget && state.config.widget.auto_open) {
           window.setTimeout(function () {
-            state.open = true;
-            panel.style.display = "flex";
+            setPanelVisibility(true);
           }, state.config.widget.auto_open_delay_ms || 0);
         }
       })
@@ -719,8 +799,11 @@
   });
 
   launcher.addEventListener("click", function () {
-    state.open = !state.open;
-    panel.style.display = state.open ? "flex" : "none";
+    setPanelVisibility(!state.open);
+  });
+
+  backdrop.addEventListener("click", function () {
+    setPanelVisibility(false);
   });
 
   window.addEventListener("load", function () {
@@ -730,6 +813,7 @@
 
     const embedTarget = document.querySelector("[data-wcp-embed='1']");
     state.embedded = Boolean(embedTarget);
+    state.isPopupMode = window.WCP_CONFIG.displayMode === "popup";
     if ((window.WCP_CONFIG.displayMode === "embed" || state.embedded) && embedTarget) {
       panel.style.position = "relative";
       panel.style.right = "auto";
@@ -740,18 +824,29 @@
       panel.style.height = "520px";
       embedTarget.appendChild(panel);
     } else {
+      document.body.appendChild(backdrop);
       document.body.appendChild(launcher);
       document.body.appendChild(panel);
     }
 
-    if (window.WCP_CONFIG.displayMode === "button" || window.WCP_CONFIG.displayMode === "popup") {
+    if (state.isPopupMode) {
+      launcher.style.display = "none";
+      panel.style.left = "50%";
+      panel.style.top = "50%";
+      panel.style.right = "auto";
+      panel.style.bottom = "auto";
+      panel.style.transform = "translate(-50%, -50%)";
+      panel.style.maxWidth = "min(420px, calc(100vw - 24px))";
+      panel.style.width = "100%";
+    }
+
+    if (window.WCP_CONFIG.displayMode === "button" || state.isPopupMode) {
       launcher.style.display = "none";
       const selector = window.WCP_CONFIG.triggerSelector || "[data-wcp-trigger='1']";
       document.querySelectorAll(selector).forEach(function (element) {
         element.addEventListener("click", function (event) {
           event.preventDefault();
-          state.open = true;
-          panel.style.display = "flex";
+          setPanelVisibility(true);
         });
       });
     }
@@ -759,9 +854,17 @@
     if (window.innerWidth < 640) {
       panel.style.width = "calc(100vw - 12px)";
       panel.style.height = "calc(100vh - 24px)";
-      panel.style.bottom = "12px";
-      panel.style.right = "6px";
-      panel.style.left = "6px";
+      if (state.isPopupMode) {
+        panel.style.left = "50%";
+        panel.style.right = "auto";
+        panel.style.top = "50%";
+        panel.style.bottom = "auto";
+        panel.style.transform = "translate(-50%, -50%)";
+      } else {
+        panel.style.bottom = "12px";
+        panel.style.right = "6px";
+        panel.style.left = "6px";
+      }
       launcher.style.bottom = "max(16px, env(safe-area-inset-bottom))";
     }
 
@@ -770,11 +873,10 @@
       if (!state.token) {
         return;
       }
-      void fetch(apiBase + "/heartbeat", {
+      void fetchWithPluginAuth("/heartbeat", {
         method: "POST",
         headers: {
-          "Content-Type": "application/json",
-          Authorization: "Bearer " + state.token
+          "Content-Type": "application/json"
         },
         body: JSON.stringify({
           client_id: window.WCP_CONFIG.clientId,

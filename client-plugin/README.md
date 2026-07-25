@@ -15,9 +15,12 @@ This folder is prepared as the standalone WordPress plugin project for the centr
 - stores `backend_url`, `client_id`, and `client_secret` in WordPress server-side settings
 - supports `floating`, `embed`, `button`, and `popup` display modes
 - supports `[wcp_chatbot]` and `[wcp_chatbot_trigger]` shortcodes
-- registers an Elementor widget for embed and button-trigger use cases
+- registers an Elementor widget for embed, button-trigger, and popup-trigger use cases
 - performs plugin verification server-side in PHP and passes only short-lived bootstrap data to the browser
+- scopes browser-side cached config and resume state per client and site hostname
+- silently refreshes browser widget tokens through WordPress PHP when short-lived tokens expire
 - sends heartbeat metadata including WordPress, PHP, and Elementor versions
+- schedules a server-side heartbeat through WordPress cron so installation visibility does not depend only on visitor traffic
 - caches widget config locally in the browser
 - resumes sessions with the backend
 - supports optional WordPress-side lead email notifications through `wp_mail()`

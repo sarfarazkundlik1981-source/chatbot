@@ -16,6 +16,8 @@ type ClientOption = {
   name: string;
 };
 
+const knowledgeTypes = ["company", "services", "pricing", "faq", "team", "hours", "locations", "contact", "policies"] as const;
+
 type Section =
   | "overview"
   | "settings"
@@ -99,6 +101,11 @@ function normalizeDomain(value: string) {
   } catch {
     return trimmed.replace(/^https?:\/\//i, "").replace(/\/+$/, "").toLowerCase();
   }
+}
+
+function optionalUrl(value: string) {
+  const trimmed = value.trim();
+  return trimmed ? trimmed : undefined;
 }
 
 export default function HomePage() {
@@ -472,7 +479,16 @@ export default function HomePage() {
     setError("");
     setNotice("");
     try {
-      await apiFetch(path, session.token, { method: "PUT", body: JSON.stringify(body) });
+      const normalizedBody =
+        path.endsWith("/branding") && body && typeof body === "object"
+          ? {
+              ...body,
+              logo_url: optionalUrl(String((body as Record<string, unknown>).logo_url ?? "")),
+              avatar_url: optionalUrl(String((body as Record<string, unknown>).avatar_url ?? "")),
+              launcher_icon_url: optionalUrl(String((body as Record<string, unknown>).launcher_icon_url ?? ""))
+            }
+          : body;
+      await apiFetch(path, session.token, { method: "PUT", body: JSON.stringify(normalizedBody) });
       setNotice("Saved successfully.");
       await loadSection(activeSection);
     } catch (nextError) {
@@ -501,6 +517,7 @@ export default function HomePage() {
         method: "POST",
         body: JSON.stringify({
           ...knowledgeDraft,
+          type: knowledgeDraft.type,
           content: parsedContent.value
         })
       });
@@ -957,7 +974,13 @@ export default function HomePage() {
         <div className="panel">
           <h2>Create Knowledge Entry</h2>
           <div className="form-grid">
-            <input className="field" value={knowledgeDraft.type} onChange={(event) => updateKnowledgeDraft("type", event.target.value)} placeholder="Type" />
+            <select className="field" value={knowledgeDraft.type} onChange={(event) => updateKnowledgeDraft("type", event.target.value)}>
+              {knowledgeTypes.map((type) => (
+                <option key={type} value={type}>
+                  {type}
+                </option>
+              ))}
+            </select>
             <input className="field" value={knowledgeDraft.title} onChange={(event) => updateKnowledgeDraft("title", event.target.value)} placeholder="Title" />
             <input className="field" type="number" value={knowledgeDraft.sort_order} onChange={(event) => updateKnowledgeDraft("sort_order", Number(event.target.value))} placeholder="Sort order" />
             <label className="checkbox"><input type="checkbox" checked={knowledgeDraft.enabled} onChange={(event) => updateKnowledgeDraft("enabled", event.target.checked)} />Enabled</label>
