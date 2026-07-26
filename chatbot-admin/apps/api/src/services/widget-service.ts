@@ -70,6 +70,9 @@ export async function getWidgetConfig(clientId: string) {
     widget: {
       position: widgetSettings?.position ?? "bottom-right",
       greeting: widgetSettings?.greeting ?? "Hi, how can I help you today?",
+      header_title: widgetSettings?.headerTitle ?? null,
+      header_description: widgetSettings?.headerDescription ?? null,
+      footer_text: widgetSettings?.footerText ?? null,
       auto_open: widgetSettings?.autoOpen ?? false,
       auto_open_delay_ms: widgetSettings?.autoOpenDelayMs ?? 0,
       hide_for_logged_in_users: widgetSettings?.hideForLoggedInUsers ?? false

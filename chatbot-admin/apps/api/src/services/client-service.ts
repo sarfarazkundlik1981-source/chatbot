@@ -45,6 +45,9 @@ type BrandingInput = {
 type WidgetSettingsInput = {
   position: string;
   greeting: string;
+  header_title?: string;
+  header_description?: string;
+  footer_text?: string;
   auto_open: boolean;
   auto_open_delay_ms: number;
   hide_for_logged_in_users: boolean;
@@ -302,6 +305,9 @@ export async function upsertWidgetSettings(clientId: string, input: WidgetSettin
     update: {
       position: input.position,
       greeting: input.greeting,
+      headerTitle: input.header_title || null,
+      headerDescription: input.header_description || null,
+      footerText: input.footer_text || null,
       autoOpen: input.auto_open,
       autoOpenDelayMs: input.auto_open_delay_ms,
       hideForLoggedInUsers: input.hide_for_logged_in_users,
@@ -312,6 +318,9 @@ export async function upsertWidgetSettings(clientId: string, input: WidgetSettin
       clientId,
       position: input.position,
       greeting: input.greeting,
+      headerTitle: input.header_title || null,
+      headerDescription: input.header_description || null,
+      footerText: input.footer_text || null,
       autoOpen: input.auto_open,
       autoOpenDelayMs: input.auto_open_delay_ms,
       hideForLoggedInUsers: input.hide_for_logged_in_users
@@ -691,6 +700,9 @@ export async function rollbackConfigVersion(clientId: string, versionNumber: num
         update: {
           position: snapshot.widgetSettings.position,
           greeting: snapshot.widgetSettings.greeting,
+          headerTitle: snapshot.widgetSettings.headerTitle ?? null,
+          headerDescription: snapshot.widgetSettings.headerDescription ?? null,
+          footerText: snapshot.widgetSettings.footerText ?? null,
           autoOpen: snapshot.widgetSettings.autoOpen,
           autoOpenDelayMs: snapshot.widgetSettings.autoOpenDelayMs,
           hideForLoggedInUsers: snapshot.widgetSettings.hideForLoggedInUsers,
@@ -700,6 +712,9 @@ export async function rollbackConfigVersion(clientId: string, versionNumber: num
           clientId,
           position: snapshot.widgetSettings.position,
           greeting: snapshot.widgetSettings.greeting,
+          headerTitle: snapshot.widgetSettings.headerTitle ?? null,
+          headerDescription: snapshot.widgetSettings.headerDescription ?? null,
+          footerText: snapshot.widgetSettings.footerText ?? null,
           autoOpen: snapshot.widgetSettings.autoOpen,
           autoOpenDelayMs: snapshot.widgetSettings.autoOpenDelayMs,
           hideForLoggedInUsers: snapshot.widgetSettings.hideForLoggedInUsers

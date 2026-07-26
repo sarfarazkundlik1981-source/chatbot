@@ -22,6 +22,10 @@ const optionalEmailField = z.preprocess(
   (value) => (value === null || value === "" ? undefined : value),
   z.string().trim().email().max(320).optional()
 );
+const optionalPhoneField = z.preprocess(
+  (value) => (value === null || value === "" ? undefined : value),
+  z.string().trim().regex(/^[0-9]{7,20}$/, "Phone must contain 7 to 20 digits only.").optional()
+);
 const optionalCaptchaToken = z.preprocess(
   (value) => (value === null || value === "" ? undefined : value),
   z.string().min(10).max(4000).optional()
@@ -439,7 +443,7 @@ pluginRouter.post("/lead", requireAuth("plugin"), leadProtection, requireIdempot
   const body = z.object({
     name: optionalTextField(120),
     email: optionalEmailField,
-    phone: optionalTextField(50),
+    phone: optionalPhoneField,
     status: optionalTextField(50),
     message: optionalTextField(4000),
     data: z.record(z.any()).optional(),

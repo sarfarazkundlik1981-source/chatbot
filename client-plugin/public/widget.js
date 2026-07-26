@@ -155,7 +155,7 @@
   closeButton.textContent = "\u00d7";
   headerTitle.textContent = "Assistant";
   headerSubtitle.textContent = "";
-  footer.textContent = "Powered by Swift FM";
+  footer.textContent = "Powered by Assistant";
 
   headerText.appendChild(headerTitle);
   headerText.appendChild(headerSubtitle);
@@ -306,6 +306,29 @@
     return payload;
   }
 
+  function normalizePhone(value) {
+    return String(value || "").replace(/\D/g, "");
+  }
+
+  function getAppointmentServiceOptions() {
+    const names = [];
+    (state.config && Array.isArray(state.config.price_list) ? state.config.price_list : []).forEach(function (item) {
+      const name = String((item && item.name) || "").trim();
+      if (name && names.indexOf(name) === -1) {
+        names.push(name);
+      }
+    });
+    return names.map(function (name) {
+      return { value: name, label: name };
+    });
+  }
+
+  function todayDateInputValue() {
+    const now = new Date();
+    const offsetMs = now.getTimezoneOffset() * 60000;
+    return new Date(now.getTime() - offsetMs).toISOString().slice(0, 10);
+  }
+
   function apiFetch(path, init) {
     return fetch(apiBase + path, init).then(function (response) {
       return response.json().then(function (payload) {
@@ -430,16 +453,62 @@
     const form = createBox("form", "display:flex;flex-direction:column;gap:9px;margin:0;width:100%;box-sizing:border-box");
     const inputs = {};
     fields.forEach(function (field) {
-      const fieldStyle = "display:block;width:100%;box-sizing:border-box;min-height:40px;padding:10px 12px;border-radius:10px;border:1px solid #d8deea;background:#fff;color:#111827;font:400 13px/1.4 'Segoe UI',Arial,sans-serif;outline:none;box-shadow:none;appearance:none";
-      const element = field.multiline ? createBox("textarea", fieldStyle + ";min-height:78px;resize:vertical") : createBox("input", fieldStyle);
+      const fieldStyle = "display:block;width:100%;box-sizing:border-box;min-height:40px;padding:10px 12px;border-radius:10px;border:1px solid #d8deea;background:#fff;color:#111827;font:400 13px/1.4 'Segoe UI',Arial,sans-serif;outline:none;box-shadow:none";
+      const element = field.options && field.options.length
+        ? createBox("select", fieldStyle)
+        : field.multiline
+          ? createBox("textarea", fieldStyle + ";min-height:78px;resize:vertical")
+          : createBox("input", fieldStyle);
       element.className = "wcp-chatbot-form-field";
-      if (!field.multiline) {
+      if (field.options && field.options.length) {
+        const placeholder = document.createElement("option");
+        placeholder.value = "";
+        placeholder.textContent = field.label;
+        placeholder.disabled = Boolean(field.required);
+        placeholder.selected = true;
+        element.appendChild(placeholder);
+        field.options.forEach(function (option) {
+          const optionElement = document.createElement("option");
+          optionElement.value = String(option.value || option.label || "");
+          optionElement.textContent = String(option.label || option.value || "");
+          element.appendChild(optionElement);
+        });
+      } else if (!field.multiline) {
         element.type = field.type || "text";
+      }
+      if (field.inputMode) {
+        element.inputMode = field.inputMode;
+      }
+      if (field.pattern) {
+        element.pattern = field.pattern;
+      }
+      if (field.min) {
+        element.min = field.min;
+      }
+      if (field.max) {
+        element.max = field.max;
+      }
+      if (field.step) {
+        element.step = field.step;
+      }
+      if (field.autocomplete) {
+        element.autocomplete = field.autocomplete;
+      }
+      if (field.normalize) {
+        element.dataset.wcpNormalize = field.normalize;
+        if (field.normalize === "phone") {
+          element.addEventListener("input", function () {
+            element.value = normalizePhone(element.value);
+          });
+        }
       }
       if (field.required) {
         element.required = true;
       }
       element.placeholder = field.label;
+      if (field.title) {
+        element.title = field.title;
+      }
       if (field.value !== undefined) {
         element.value = field.value;
       }
@@ -462,7 +531,7 @@
       submit.style.cursor = "not-allowed";
       const values = {};
       Object.keys(inputs).forEach(function (key) {
-        values[key] = inputs[key].value;
+        values[key] = inputs[key].dataset.wcpNormalize === "phone" ? normalizePhone(inputs[key].value) : inputs[key].value;
       });
       Promise.resolve(onSubmit(values)).finally(function () {
         if (submit.parentNode) {
@@ -495,9 +564,9 @@
           showInlineForm(
             "Request a call",
             [
-              { key: "name", label: "Name" },
-              { key: "phone", label: "Phone", required: true },
-              { key: "email", label: "Email", type: "email" },
+              { key: "name", label: "Name", autocomplete: "name" },
+              { key: "phone", label: "Phone", type: "tel", inputMode: "numeric", pattern: "[0-9]{7,20}", normalize: "phone", required: true, autocomplete: "tel", title: "Enter numbers only." },
+              { key: "email", label: "Email", type: "email", autocomplete: "email" },
               { key: "message", label: "Message", multiline: true }
             ],
             function (values) {
@@ -533,12 +602,12 @@
           showInlineForm(
             state.config.appointment_request.title || "Request appointment",
             [
-              { key: "name", label: "Name", required: true },
-              { key: "email", label: "Email", type: "email", required: true },
-              { key: "phone", label: "Phone", required: true },
-              { key: "service", label: "Service" },
-              { key: "preferred_date", label: "Preferred date", required: true },
-              { key: "preferred_time", label: "Preferred time", required: true }
+              { key: "name", label: "Name", required: true, autocomplete: "name" },
+              { key: "email", label: "Email", type: "email", required: true, autocomplete: "email" },
+              { key: "phone", label: "Phone", type: "tel", inputMode: "numeric", pattern: "[0-9]{7,20}", normalize: "phone", required: true, autocomplete: "tel", title: "Enter numbers only." },
+              { key: "service", label: "Select service", options: getAppointmentServiceOptions(), required: getAppointmentServiceOptions().length > 0 },
+              { key: "preferred_date", label: "Preferred date", type: "date", min: todayDateInputValue(), required: true },
+              { key: "preferred_time", label: "Preferred time", type: "time", step: "900", required: true }
             ],
             function (values) {
               return getCaptchaToken("appointment")
@@ -610,7 +679,13 @@
               key: field.key,
               label: field.label,
               value: "",
-              multiline: field.field_type === "textarea"
+              multiline: field.field_type === "textarea",
+              required: Boolean(field.required),
+              type: field.field_type === "number" ? "number" : field.field_type === "email" ? "email" : field.field_type === "date" ? "date" : field.field_type === "time" ? "time" : "text",
+              inputMode: field.field_type === "number" ? "decimal" : undefined,
+              options: Array.isArray(field.options) ? field.options.map(function (option) {
+                return typeof option === "string" ? { value: option, label: option } : option;
+              }) : undefined
             };
           });
           showInlineForm(state.config.quote_calculator.title || "Instant quote", fields, function (values) {
@@ -702,9 +777,10 @@
 
     const businessName = cleanDisplayName(state.config.business && state.config.business.name ? state.config.business.name : "");
     const siteName = cleanDisplayName(window.WCP_CONFIG.siteName || "");
-    const title = businessName || siteName || "SFM";
-    const subtitle = cleanDisplayName(window.WCP_CONFIG.siteTagline || "") || "Swift Facilities Management";
-    headerTitle.textContent = /assistant/i.test(title) ? title : title + " Assistant";
+    const title = cleanDisplayName(state.config.widget.header_title || "") || businessName || siteName || "Assistant";
+    const subtitle = cleanDisplayName(state.config.widget.header_description || "") || cleanDisplayName(window.WCP_CONFIG.siteTagline || "");
+    const footerCopy = String(state.config.widget.footer_text || "").trim();
+    headerTitle.textContent = title;
     headerSubtitle.textContent = subtitle;
     launcher.textContent = "Chat";
     const panelWidth = appearanceNumber("panel_width", 430, 320, 640);
@@ -738,7 +814,7 @@
     send.style.color = buttonText;
     footer.style.color = footerText;
     headerSubtitle.style.display = subtitle ? "block" : "none";
-    footer.textContent = "Powered by " + title;
+    footer.textContent = footerCopy || "Powered by " + title;
     if (state.config.widget.position === "bottom-left") {
       launcher.style.left = "20px";
       launcher.style.right = "auto";

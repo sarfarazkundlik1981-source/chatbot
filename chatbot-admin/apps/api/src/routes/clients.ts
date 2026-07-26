@@ -95,6 +95,9 @@ const pluginInstallationRenameSchema = z.object({
 const widgetSettingsSchema = z.object({
   position: z.string().min(1),
   greeting: z.string().min(1),
+  header_title: z.string().trim().max(80).optional(),
+  header_description: z.string().trim().max(140).optional(),
+  footer_text: z.string().trim().max(120).optional(),
   auto_open: z.boolean(),
   auto_open_delay_ms: z.number().int().nonnegative(),
   hide_for_logged_in_users: z.boolean(),

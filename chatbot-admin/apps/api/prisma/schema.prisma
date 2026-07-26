@@ -279,6 +279,9 @@ model WidgetSettings {
   clientId               String   @unique
   position               String
   greeting               String
+  headerTitle            String?
+  headerDescription      String?
+  footerText             String?
   autoOpen               Boolean  @default(false)
   autoOpenDelayMs        Int      @default(0)
   hideForLoggedInUsers   Boolean  @default(false)

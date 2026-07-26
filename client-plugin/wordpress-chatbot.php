@@ -764,7 +764,7 @@ function wcp_send_lead_notification(): void
 
     $name = sanitize_text_field((string) ($_POST['name'] ?? ''));
     $lead_email = sanitize_email((string) ($_POST['email'] ?? ''));
-    $phone = sanitize_text_field((string) ($_POST['phone'] ?? ''));
+    $phone = preg_replace('/\D+/', '', sanitize_text_field((string) ($_POST['phone'] ?? '')));
     $message = sanitize_textarea_field((string) ($_POST['message'] ?? ''));
     $status = sanitize_text_field((string) ($_POST['status'] ?? 'new'));
     $captcha_token = sanitize_text_field((string) ($_POST['captcha_token'] ?? ''));

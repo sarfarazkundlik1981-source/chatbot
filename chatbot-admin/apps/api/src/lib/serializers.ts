@@ -82,6 +82,9 @@ export function serializeWidgetSettings(settings: {
   clientId: string;
   position: string;
   greeting: string;
+  headerTitle: string | null;
+  headerDescription: string | null;
+  footerText: string | null;
   autoOpen: boolean;
   autoOpenDelayMs: number;
   hideForLoggedInUsers: boolean;
@@ -92,6 +95,9 @@ export function serializeWidgetSettings(settings: {
     client_id: settings.clientId,
     position: settings.position,
     greeting: settings.greeting,
+    header_title: settings.headerTitle,
+    header_description: settings.headerDescription,
+    footer_text: settings.footerText,
     auto_open: settings.autoOpen,
     auto_open_delay_ms: settings.autoOpenDelayMs,
     hide_for_logged_in_users: settings.hideForLoggedInUsers,

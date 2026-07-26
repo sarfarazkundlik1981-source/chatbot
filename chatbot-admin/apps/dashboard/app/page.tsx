@@ -249,6 +249,15 @@ function normalizeRequestBody(path: string, body: unknown) {
     };
   }
 
+  if (path.endsWith("/widget-settings")) {
+    return {
+      ...record,
+      header_title: optionalText(String(record.header_title ?? "")),
+      header_description: optionalText(String(record.header_description ?? "")),
+      footer_text: optionalText(String(record.footer_text ?? ""))
+    };
+  }
+
   if (path.endsWith("/domains")) {
     return {
       ...record,
@@ -339,6 +348,9 @@ export default function HomePage() {
   const [widgetForm, setWidgetForm] = useState({
     position: "bottom-right",
     greeting: "Hi, how can I help you today?",
+    header_title: "",
+    header_description: "",
+    footer_text: "",
     auto_open: false,
     auto_open_delay_ms: 0,
     hide_for_logged_in_users: false,
@@ -1208,6 +1220,9 @@ export default function HomePage() {
           <div className="form-grid">
             <input className="field" value={widgetForm.position} onChange={(event) => setWidgetForm({ ...widgetForm, position: event.target.value })} placeholder="Position" />
             <input className="field" value={widgetForm.greeting} onChange={(event) => setWidgetForm({ ...widgetForm, greeting: event.target.value })} placeholder="Greeting" />
+            <input className="field" value={widgetForm.header_title} onChange={(event) => setWidgetForm({ ...widgetForm, header_title: event.target.value })} placeholder="Chatbot header heading" />
+            <input className="field" value={widgetForm.header_description} onChange={(event) => setWidgetForm({ ...widgetForm, header_description: event.target.value })} placeholder="Chatbot header description" />
+            <input className="field" value={widgetForm.footer_text} onChange={(event) => setWidgetForm({ ...widgetForm, footer_text: event.target.value })} placeholder="Chatbot footer text" />
             <input className="field" type="number" value={widgetForm.auto_open_delay_ms} onChange={(event) => setWidgetForm({ ...widgetForm, auto_open_delay_ms: Number(event.target.value) })} placeholder="Auto open delay" />
             <label className="checkbox"><input type="checkbox" checked={widgetForm.auto_open} onChange={(event) => setWidgetForm({ ...widgetForm, auto_open: event.target.checked })} />Auto open</label>
             <label className="checkbox"><input type="checkbox" checked={widgetForm.hide_for_logged_in_users} onChange={(event) => setWidgetForm({ ...widgetForm, hide_for_logged_in_users: event.target.checked })} />Hide for logged-in users</label>
