@@ -180,6 +180,8 @@ function wcp_enqueue_assets(): void
         'pluginVersion' => WCP_PLUGIN_VERSION,
         'siteUrl' => home_url('/'),
         'siteHost' => wcp_get_site_domain(),
+        'siteName' => get_bloginfo('name'),
+        'siteTagline' => get_bloginfo('description'),
         'wordpressVersion' => get_bloginfo('version'),
         'phpVersion' => PHP_VERSION,
         'elementorVersion' => defined('ELEMENTOR_VERSION') ? ELEMENTOR_VERSION : '',
