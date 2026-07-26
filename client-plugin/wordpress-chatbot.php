@@ -3,7 +3,7 @@
  * Plugin Name: WordPress Chatbot Connector
  * Plugin URI: https://example.com
  * Description: Thin connector plugin for the centralized WordPress AI chatbot platform.
- * Version: 0.1.1
+ * Version: 0.1.2
  * Requires at least: 6.5
  * Requires PHP: 8.1
  * Author: Platform Team
@@ -13,7 +13,7 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-define('WCP_PLUGIN_VERSION', '0.1.1');
+define('WCP_PLUGIN_VERSION', '0.1.2');
 define('WCP_OPTION_KEY', 'wcp_connector_settings');
 define('WCP_HEARTBEAT_HOOK', 'wcp_server_heartbeat');
 
@@ -46,6 +46,16 @@ function wcp_get_settings(): array
     }
 
     return array_merge($defaults, $settings);
+}
+
+function wcp_clear_bootstrap_cache(?string $clientId = null): void
+{
+    $domain = wcp_get_site_domain();
+    if (!$domain || !$clientId) {
+        return;
+    }
+
+    delete_transient('wcp_bootstrap_' . md5($clientId . '|' . $domain));
 }
 
 function wcp_normalize_settings(array $input, ?array $existing = null): array
@@ -85,7 +95,19 @@ function wcp_sanitize_settings($input): array
         return wcp_get_settings();
     }
 
-    return wcp_normalize_settings($input, wcp_get_settings());
+    $existing = wcp_get_settings();
+    $normalized = wcp_normalize_settings($input, $existing);
+
+    if (
+        ($existing['backend_url'] ?? '') !== ($normalized['backend_url'] ?? '') ||
+        ($existing['client_id'] ?? '') !== ($normalized['client_id'] ?? '') ||
+        ($existing['client_secret'] ?? '') !== ($normalized['client_secret'] ?? '')
+    ) {
+        wcp_clear_bootstrap_cache((string) ($existing['client_id'] ?? ''));
+        wcp_clear_bootstrap_cache((string) ($normalized['client_id'] ?? ''));
+    }
+
+    return $normalized;
 }
 
 function wcp_register_settings(): void
@@ -203,18 +225,9 @@ function wcp_render_settings_page(): void
             do_settings_sections('wcp_connector');
             submit_button('Save Settings');
             ?>
-            <button
-                type="submit"
-                class="button button-secondary"
-                formaction="<?php echo esc_url(admin_url('admin-post.php')); ?>"
-                formmethod="post"
-                name="action"
-                value="wcp_test_connection"
-            >
-                Test Connection
-            </button>
+            <button type="submit" class="button button-secondary" name="action" value="wcp_test_connection" formaction="<?php echo esc_url(admin_url('admin-post.php')); ?>" formmethod="post">Save and Test Connection</button>
         </form>
-        <p class="description">Test Connection uses the current form values. You do not need to save first.</p>
+        <p class="description">Save and Test Connection stores the current values, clears cached verification state, and tests exactly what the live widget will use.</p>
     </div>
     <?php
 }
@@ -419,6 +432,8 @@ function wcp_handle_test_connection(): void
 
     $postedSettings = $_POST[WCP_OPTION_KEY] ?? [];
     $settings = is_array($postedSettings) ? wcp_normalize_settings($postedSettings, wcp_get_settings()) : wcp_get_settings();
+    update_option(WCP_OPTION_KEY, $settings);
+    wcp_clear_bootstrap_cache((string) ($settings['client_id'] ?? ''));
 
     $result = wcp_run_connection_test($settings);
     if (is_wp_error($result)) {
