@@ -97,31 +97,31 @@
     return element;
   }
 
-  const launcher = createBox("button", "position:fixed;right:20px;bottom:20px;min-width:84px;height:52px;padding:0 20px;border:none;border-radius:999px;background:#6d28d9;color:#fff;cursor:pointer;z-index:9999;font:600 18px/1 'Segoe UI',sans-serif;box-shadow:0 18px 45px rgba(76,29,149,.35)");
+  const launcher = createBox("button", "position:fixed;right:24px;bottom:24px;min-width:76px;height:44px;padding:0 18px;border:none;border-radius:999px;background:#050505;color:#fff;cursor:pointer;z-index:9999;font:600 14px/1 'Segoe UI',sans-serif;box-shadow:0 14px 34px rgba(0,0,0,.22)");
   launcher.type = "button";
   launcher.textContent = "Chat";
 
   const backdrop = createBox("div", "position:fixed;inset:0;background:rgba(2,6,23,.62);display:none;z-index:9998");
-  const panel = createBox("div", "position:fixed;right:16px;bottom:16px;width:425px;max-width:calc(100vw - 16px);height:min(650px, calc(100vh - 24px));background:#ffffff;color:#111827;border:1px solid #d9dee8;border-radius:0;display:none;flex-direction:column;overflow:hidden;z-index:9999;box-shadow:0 28px 65px rgba(15,23,42,.24)");
-  const header = createBox("div", "display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:#000;color:#fff");
-  const headerIdentity = createBox("div", "display:flex;align-items:center;gap:10px;min-width:0");
-  const headerIcon = createBox("div", "width:32px;height:32px;border:1px solid rgba(255,255,255,.22);border-radius:999px;display:flex;align-items:center;justify-content:center;font-size:16px;flex:0 0 auto");
+  const panel = createBox("div", "position:fixed;right:24px;bottom:24px;width:474px;max-width:calc(100vw - 32px);height:min(650px, calc(100vh - 48px));background:#f6f7f9;color:#111827;border:1px solid #d8dde8;border-radius:18px;display:none;flex-direction:column;overflow:hidden;z-index:9999;box-shadow:0 20px 48px rgba(15,23,42,.18)");
+  const header = createBox("div", "display:flex;align-items:center;justify-content:space-between;padding:10px 18px;background:#050505;color:#fff;min-height:52px");
+  const headerIdentity = createBox("div", "display:flex;align-items:center;gap:12px;min-width:0");
+  const headerIcon = createBox("div", "width:34px;height:34px;background:#171717;border:none;border-radius:999px;display:flex;align-items:center;justify-content:center;font-size:15px;flex:0 0 auto");
   const headerText = createBox("div", "display:flex;flex-direction:column;min-width:0");
-  const headerTitle = createBox("div", "font:700 17px/1.2 'Segoe UI',sans-serif;white-space:nowrap;overflow:hidden;text-overflow:ellipsis");
-  const headerSubtitle = createBox("div", "font:500 12px/1.25 'Segoe UI',sans-serif;color:rgba(255,255,255,.76);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px");
-  const headerControls = createBox("div", "display:flex;align-items:center;gap:8px;flex:0 0 auto");
-  const minimizeButton = createBox("button", "width:26px;height:26px;border:none;background:transparent;color:#fff;border-radius:999px;cursor:pointer;font:400 18px/1 'Segoe UI',sans-serif");
-  const closeButton = createBox("button", "width:26px;height:26px;border:none;background:transparent;color:#fff;border-radius:999px;cursor:pointer;font:400 22px/1 'Segoe UI',sans-serif");
-  const messages = createBox("div", "flex:1;overflow:auto;padding:22px 10px 12px;background:#fff;display:flex;flex-direction:column;gap:12px");
-  const actions = createBox("div", "display:none;gap:8px;flex-wrap:wrap;padding:0 10px 10px;background:#fff");
-  const tools = createBox("div", "display:none;gap:8px;padding:0 10px 10px;background:#fff;flex-wrap:wrap");
-  const formHost = createBox("div", "display:none;padding:10px;background:#fff;border-top:1px solid #ebedf2");
+  const headerTitle = createBox("div", "font:700 16px/1.15 'Segoe UI',sans-serif;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#fff");
+  const headerSubtitle = createBox("div", "font:400 13px/1.2 'Segoe UI',sans-serif;color:rgba(255,255,255,.76);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px");
+  const headerControls = createBox("div", "display:flex;align-items:center;gap:14px;flex:0 0 auto");
+  const minimizeButton = createBox("button", "width:24px;height:24px;border:none;background:transparent;color:#fff;border-radius:999px;cursor:pointer;font:400 18px/1 'Segoe UI',sans-serif;opacity:.9");
+  const closeButton = createBox("button", "width:24px;height:24px;border:none;background:transparent;color:#fff;border-radius:999px;cursor:pointer;font:400 22px/1 'Segoe UI',sans-serif;opacity:.9");
+  const messages = createBox("div", "flex:1;overflow:auto;padding:20px 20px 12px;background:#f6f7f9;display:flex;flex-direction:column;gap:12px;font:400 16px/1.55 'Segoe UI',sans-serif");
+  const actions = createBox("div", "display:none;gap:8px;flex-wrap:wrap;padding:0 20px 10px;background:#f6f7f9");
+  const tools = createBox("div", "display:none;gap:8px;padding:0 20px 10px;background:#f6f7f9;flex-wrap:wrap");
+  const formHost = createBox("div", "display:none;padding:12px 20px;background:#f6f7f9;border-top:1px solid #edf0f4");
   const captchaHost = createBox("div", "display:none");
-  const composerWrap = createBox("div", "padding:10px 10px 4px;background:#fff;border-top:1px solid #ebedf2");
-  const composer = createBox("form", "display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid #d8dde8;border-radius:18px;background:#fff");
-  const input = createBox("input", "flex:1;padding:10px 6px;border:none;background:transparent;color:#111827;font:400 16px/1.35 'Segoe UI',sans-serif;outline:none");
-  const send = createBox("button", "width:40px;height:40px;border:none;border-radius:12px;background:#a3a3a3;color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:18px;flex:0 0 auto");
-  const footer = createBox("div", "padding:4px 10px 8px;background:#fff;color:#97a0b3;text-align:center;font:500 12px/1.2 'Segoe UI',sans-serif");
+  const composerWrap = createBox("div", "padding:16px 14px 8px;background:#fff;border-top:1px solid #edf0f4");
+  const composer = createBox("form", "display:flex;align-items:center;gap:8px;padding:6px 8px 6px 14px;border:1px solid #d8dde8;border-radius:14px;background:#f9fafb");
+  const input = createBox("input", "flex:1;min-width:0;padding:8px 0;border:none;background:transparent;color:#111827;font:400 16px/1.35 'Segoe UI',sans-serif;outline:none");
+  const send = createBox("button", "width:32px;height:32px;border:none;border-radius:10px;background:#8f8f8f;color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:15px;flex:0 0 auto");
+  const footer = createBox("div", "padding:0 10px 10px;background:#fff;color:#99a2b2;text-align:center;font:500 13px/1.2 'Segoe UI',sans-serif");
 
   input.type = "text";
   input.placeholder = "Type a message...";
@@ -162,12 +162,13 @@
     const bubble = createBox(
       "div",
       [
-        "max-width:85%",
+        "max-width:78%",
         "padding:14px 18px",
-        "border-radius:22px",
+        "border-radius:16px",
+        "font:400 16px/1.55 'Segoe UI',sans-serif",
         role === "user"
-          ? "background:#6d28d9;color:#fff;align-self:flex-end;border-bottom-right-radius:8px;white-space:pre-wrap"
-          : "background:#fff;color:#2b3345;align-self:flex-start;white-space:pre-wrap;border:1px solid #dbe1eb;box-shadow:0 4px 14px rgba(15,23,42,.08);border-bottom-left-radius:8px"
+          ? "background:#111827;color:#fff;align-self:flex-end;border-bottom-right-radius:8px;white-space:pre-wrap"
+          : "background:#fff;color:#1f2937;align-self:flex-start;white-space:pre-wrap;border:1px solid #dfe4ec;box-shadow:0 2px 8px rgba(15,23,42,.06);border-bottom-left-radius:8px"
       ].join(";")
     );
     bubble.textContent = text;
@@ -181,7 +182,7 @@
     input.style.opacity = disabled ? "0.6" : "1";
     send.style.opacity = disabled ? "0.6" : "1";
     send.style.cursor = disabled ? "not-allowed" : "pointer";
-    send.style.background = disabled ? "#b0b0b0" : (state.config && state.config.branding && state.config.branding.primary_color) || "#a3a3a3";
+    send.style.background = disabled ? "#b0b0b0" : "#8f8f8f";
   }
 
   function setUnavailableState(message) {
@@ -226,7 +227,7 @@
     }
     container.style.display = "flex";
     buttons.forEach(function (buttonConfig) {
-      const button = createBox("button", "padding:10px 14px;border:1px solid #d8deea;border-radius:12px;background:#fff;color:#1f2937;cursor:pointer;font:600 14px/1.2 'Segoe UI',sans-serif");
+      const button = createBox("button", "padding:8px 11px;border:1px solid #d8deea;border-radius:10px;background:#fff;color:#1f2937;cursor:pointer;font:600 13px/1.2 'Segoe UI',sans-serif");
       button.type = "button";
       button.textContent = buttonConfig.label;
       button.addEventListener("click", buttonConfig.onClick);
@@ -393,12 +394,12 @@
   function showInlineForm(title, fields, onSubmit) {
     formHost.innerHTML = "";
     formHost.style.display = "block";
-    const heading = createBox("div", "font-weight:600;margin-bottom:8px");
+    const heading = createBox("div", "font:600 13px/1.3 'Segoe UI',sans-serif;margin-bottom:8px");
     heading.textContent = title;
     const form = createBox("form", "display:flex;flex-direction:column;gap:8px");
     const inputs = {};
     fields.forEach(function (field) {
-      const element = field.multiline ? createBox("textarea", "padding:12px 14px;border-radius:14px;border:1px solid #d8deea;background:#fff;color:#111827;font:400 14px/1.4 'Segoe UI',sans-serif") : createBox("input", "padding:12px 14px;border-radius:14px;border:1px solid #d8deea;background:#fff;color:#111827;font:400 14px/1.4 'Segoe UI',sans-serif");
+      const element = field.multiline ? createBox("textarea", "padding:10px 12px;border-radius:12px;border:1px solid #d8deea;background:#fff;color:#111827;font:400 13px/1.4 'Segoe UI',sans-serif") : createBox("input", "padding:10px 12px;border-radius:12px;border:1px solid #d8deea;background:#fff;color:#111827;font:400 13px/1.4 'Segoe UI',sans-serif");
       if (!field.multiline) {
         element.type = field.type || "text";
       }
@@ -409,7 +410,7 @@
       inputs[field.key] = element;
       form.appendChild(element);
     });
-    const submit = createBox("button", "padding:12px 16px;border:none;border-radius:14px;background:#6d28d9;color:#fff;cursor:pointer;font:600 14px/1.2 'Segoe UI',sans-serif");
+    const submit = createBox("button", "padding:10px 14px;border:none;border-radius:12px;background:#6d28d9;color:#fff;cursor:pointer;font:600 13px/1.2 'Segoe UI',sans-serif");
     submit.type = "submit";
     submit.textContent = "Submit";
     form.appendChild(submit);
@@ -610,14 +611,15 @@
       return;
     }
 
-    const title = (window.WCP_CONFIG.siteName || "").trim() || "Assistant";
+    const businessName = (state.config.business && state.config.business.name ? state.config.business.name : "").trim();
+    const title = businessName || (window.WCP_CONFIG.siteName || "").trim() || "Assistant";
     const subtitle = (window.WCP_CONFIG.siteTagline || "").trim() || ((state.config.widget && state.config.widget.greeting) ? state.config.widget.greeting : "");
-    headerTitle.textContent = title + " Assistant";
+    headerTitle.textContent = /assistant/i.test(title) ? title : title + " Assistant";
     headerSubtitle.textContent = subtitle;
     launcher.textContent = "Chat";
-    launcher.style.background = state.config.branding.primary_color || "#6d28d9";
-    send.style.background = state.config.branding.primary_color || "#a3a3a3";
-    panel.style.borderRadius = state.embedded ? ((state.config.branding.border_radius || 18) + "px") : "0";
+    launcher.style.background = "#050505";
+    send.style.background = "#8f8f8f";
+    panel.style.borderRadius = state.embedded ? ((state.config.branding.border_radius || 18) + "px") : "18px";
     panel.style.fontFamily = state.config.branding.font || "Segoe UI";
     headerSubtitle.style.display = subtitle ? "block" : "none";
     footer.textContent = "Powered by " + title;
@@ -922,7 +924,7 @@
       panel.style.right = "auto";
       panel.style.bottom = "auto";
       panel.style.transform = "translate(-50%, -50%)";
-      panel.style.maxWidth = "min(420px, calc(100vw - 24px))";
+      panel.style.maxWidth = "min(474px, calc(100vw - 32px))";
       panel.style.width = "100%";
       panel.style.borderRadius = "18px";
     }
@@ -939,8 +941,9 @@
     }
 
     if (window.innerWidth < 640) {
-      panel.style.width = "calc(100vw - 12px)";
-      panel.style.height = "calc(100vh - 24px)";
+      panel.style.width = "calc(100vw - 24px)";
+      panel.style.maxWidth = "474px";
+      panel.style.height = "min(620px, calc(100vh - 56px))";
       if (state.isPopupMode) {
         panel.style.left = "50%";
         panel.style.right = "auto";
@@ -948,9 +951,9 @@
         panel.style.bottom = "auto";
         panel.style.transform = "translate(-50%, -50%)";
       } else {
-        panel.style.bottom = "12px";
-        panel.style.right = "6px";
-        panel.style.left = "6px";
+        panel.style.bottom = "16px";
+        panel.style.right = "12px";
+        panel.style.left = "12px";
       }
       launcher.style.bottom = "max(16px, env(safe-area-inset-bottom))";
     }
