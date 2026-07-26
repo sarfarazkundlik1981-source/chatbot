@@ -21,17 +21,21 @@ export async function writeLog(input: {
   requestId?: string;
   payload?: Record<string, unknown>;
 }) {
-  return prisma.log.create({
-    data: {
-      id: newId(),
-      clientId: input.clientId,
-      type: input.type,
-      severity: input.severity,
-      source: input.source,
-      requestId: input.requestId,
-      payload: (input.payload ?? {}) as object
-    }
-  });
+  try {
+    return await prisma.log.create({
+      data: {
+        id: newId(),
+        clientId: input.clientId,
+        type: input.type,
+        severity: input.severity,
+        source: input.source,
+        requestId: input.requestId,
+        payload: (input.payload ?? {}) as object
+      }
+    });
+  } catch {
+    return null;
+  }
 }
 
 export async function writeAuditLog(input: AuditInput) {
