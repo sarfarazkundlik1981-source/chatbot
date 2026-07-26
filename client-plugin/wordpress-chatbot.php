@@ -3,7 +3,7 @@
  * Plugin Name: WordPress Chatbot Connector
  * Plugin URI: https://example.com
  * Description: Thin connector plugin for the centralized WordPress AI chatbot platform.
- * Version: 0.1.0
+ * Version: 0.1.1
  * Requires at least: 6.5
  * Requires PHP: 8.1
  * Author: Platform Team
@@ -13,7 +13,7 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-define('WCP_PLUGIN_VERSION', '0.1.0');
+define('WCP_PLUGIN_VERSION', '0.1.1');
 define('WCP_OPTION_KEY', 'wcp_connector_settings');
 define('WCP_HEARTBEAT_HOOK', 'wcp_server_heartbeat');
 
@@ -48,9 +48,51 @@ function wcp_get_settings(): array
     return array_merge($defaults, $settings);
 }
 
+function wcp_normalize_settings(array $input, ?array $existing = null): array
+{
+    $existing = $existing ?: wcp_get_settings();
+
+    $normalized = [
+        'backend_url' => esc_url_raw(trim((string) ($input['backend_url'] ?? ''))),
+        'client_id' => sanitize_text_field((string) ($input['client_id'] ?? '')),
+        'client_secret' => trim((string) ($input['client_secret'] ?? '')),
+        'display_mode' => sanitize_text_field((string) ($input['display_mode'] ?? 'floating')),
+        'trigger_selector' => sanitize_text_field((string) ($input['trigger_selector'] ?? '')),
+        'desktop_only' => !empty($input['desktop_only']) ? '1' : '0',
+        'mobile_only' => !empty($input['mobile_only']) ? '1' : '0',
+        'hide_logged_in' => !empty($input['hide_logged_in']) ? '1' : '0',
+        'hide_checkout' => !empty($input['hide_checkout']) ? '1' : '0',
+        'include_pages' => sanitize_text_field((string) ($input['include_pages'] ?? '')),
+        'exclude_pages' => sanitize_text_field((string) ($input['exclude_pages'] ?? '')),
+        'notify_admin' => !empty($input['notify_admin']) ? '1' : '0',
+        'notify_email' => sanitize_email((string) ($input['notify_email'] ?? '')),
+    ];
+
+    if ($normalized['client_secret'] === '') {
+        $normalized['client_secret'] = (string) ($existing['client_secret'] ?? '');
+    }
+
+    if (!in_array($normalized['display_mode'], ['floating', 'embed', 'button', 'popup'], true)) {
+        $normalized['display_mode'] = 'floating';
+    }
+
+    return $normalized;
+}
+
+function wcp_sanitize_settings($input): array
+{
+    if (!is_array($input)) {
+        return wcp_get_settings();
+    }
+
+    return wcp_normalize_settings($input, wcp_get_settings());
+}
+
 function wcp_register_settings(): void
 {
-    register_setting('wcp_connector', WCP_OPTION_KEY);
+    register_setting('wcp_connector', WCP_OPTION_KEY, [
+        'sanitize_callback' => 'wcp_sanitize_settings',
+    ]);
 
     add_settings_section('wcp_main', 'Connector Settings', '__return_empty_string', 'wcp_connector');
 
@@ -100,6 +142,20 @@ function wcp_render_field(array $args): void
     }
 
     $type = $key === 'client_secret' ? 'password' : 'text';
+    if ($key === 'client_secret') {
+        printf(
+            '<input type="%s" name="%s[%s]" value="" class="regular-text" autocomplete="new-password" placeholder="%s" />',
+            esc_attr($type),
+            esc_attr(WCP_OPTION_KEY),
+            esc_attr($key),
+            esc_attr(!empty($settings['client_secret']) ? 'Leave blank to keep the saved secret' : 'Enter client secret')
+        );
+        if (!empty($settings['client_secret'])) {
+            echo '<p class="description">A client secret is already saved. Enter a new one only if you want to replace it.</p>';
+        }
+        return;
+    }
+
     printf(
         '<input type="%s" name="%s[%s]" value="%s" class="regular-text" />',
         esc_attr($type),
@@ -143,18 +199,22 @@ function wcp_render_settings_page(): void
         <form method="post" action="options.php">
             <?php
             settings_fields('wcp_connector');
+            wp_nonce_field('wcp_test_connection', 'wcp_test_connection_nonce');
             do_settings_sections('wcp_connector');
             submit_button('Save Settings');
             ?>
+            <button
+                type="submit"
+                class="button button-secondary"
+                formaction="<?php echo esc_url(admin_url('admin-post.php')); ?>"
+                formmethod="post"
+                name="action"
+                value="wcp_test_connection"
+            >
+                Test Connection
+            </button>
         </form>
-        <hr />
-        <h2>Connection Test</h2>
-        <p>Save settings first, then run a live verification against the platform backend.</p>
-        <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
-            <input type="hidden" name="action" value="wcp_test_connection" />
-            <?php wp_nonce_field('wcp_test_connection', 'wcp_test_connection_nonce'); ?>
-            <?php submit_button('Test Connection', 'secondary', 'submit', false); ?>
-        </form>
+        <p class="description">Test Connection uses the current form values. You do not need to save first.</p>
     </div>
     <?php
 }
@@ -298,9 +358,9 @@ function wcp_verify_backend_session()
     return $data;
 }
 
-function wcp_run_connection_test()
+function wcp_run_connection_test(?array $settingsOverride = null)
 {
-    $settings = wcp_get_settings();
+    $settings = $settingsOverride ?: wcp_get_settings();
     $domain = wcp_get_site_domain();
     if (!$domain) {
         return new WP_Error('wcp_invalid_domain', 'Site domain could not be determined.');
@@ -357,7 +417,10 @@ function wcp_handle_test_connection(): void
         admin_url('options-general.php')
     );
 
-    $result = wcp_run_connection_test();
+    $postedSettings = $_POST[WCP_OPTION_KEY] ?? [];
+    $settings = is_array($postedSettings) ? wcp_normalize_settings($postedSettings, wcp_get_settings()) : wcp_get_settings();
+
+    $result = wcp_run_connection_test($settings);
     if (is_wp_error($result)) {
         wp_safe_redirect(
             add_query_arg(
