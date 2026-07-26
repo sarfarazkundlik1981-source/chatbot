@@ -85,7 +85,17 @@ async function apiFetch(path: string, token: string, init?: RequestInit) {
   const payload = contentType.includes("application/json") ? await response.json() : await response.text();
 
   if (!response.ok) {
-    throw new Error(typeof payload === "string" ? payload : payload.error?.message ?? `Request failed: ${response.status}`);
+    if (typeof payload === "string") {
+      throw new Error(payload);
+    }
+
+    const fieldErrors = payload.error?.details?.issues?.fieldErrors;
+    const firstFieldError =
+      fieldErrors && typeof fieldErrors === "object"
+        ? Object.entries(fieldErrors).find(([, messages]) => Array.isArray(messages) && messages.length > 0)
+        : undefined;
+    const fieldMessage = firstFieldError ? ` ${firstFieldError[0]}: ${(firstFieldError[1] as string[])[0]}` : "";
+    throw new Error(`${payload.error?.message ?? `Request failed: ${response.status}`}${fieldMessage}`);
   }
 
   return payload;
@@ -123,6 +133,19 @@ function optionalText(value: string) {
   return trimmed ? trimmed : undefined;
 }
 
+function clampNumber(value: unknown, min: number, max: number, fallback: number) {
+  const numberValue = Number(value);
+  if (!Number.isFinite(numberValue)) {
+    return fallback;
+  }
+  return Math.min(max, Math.max(min, Math.round(numberValue)));
+}
+
+function normalizeColor(value: unknown, fallback: string) {
+  const trimmed = String(value ?? "").trim();
+  return trimmed || fallback;
+}
+
 function generateActivationCode() {
   const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
   const groups = Array.from({ length: 3 }, () =>
@@ -143,7 +166,26 @@ function normalizeRequestBody(path: string, body: unknown) {
       ...record,
       logo_url: optionalUrl(String(record.logo_url ?? "")),
       avatar_url: optionalUrl(String(record.avatar_url ?? "")),
-      launcher_icon_url: optionalUrl(String(record.launcher_icon_url ?? ""))
+      launcher_icon_url: optionalUrl(String(record.launcher_icon_url ?? "")),
+      primary_color: normalizeColor(record.primary_color, "#0ea5e9"),
+      secondary_color: normalizeColor(record.secondary_color, "#111827"),
+      border_radius: clampNumber(record.border_radius, 0, 32, 12),
+      font: String(record.font ?? "Segoe UI").trim() || "Segoe UI",
+      header_style: String(record.header_style ?? "dark").trim() || "dark",
+      panel_width: clampNumber(record.panel_width, 320, 640, 430),
+      panel_height: clampNumber(record.panel_height, 360, 760, 560),
+      font_size: clampNumber(record.font_size, 12, 18, 15),
+      header_bg_color: normalizeColor(record.header_bg_color, "#050505"),
+      widget_bg_color: normalizeColor(record.widget_bg_color, "#f6f7f9"),
+      composer_bg_color: normalizeColor(record.composer_bg_color, "#ffffff"),
+      input_bg_color: normalizeColor(record.input_bg_color, "#f9fafb"),
+      customer_bubble_bg_color: normalizeColor(record.customer_bubble_bg_color, "#111827"),
+      customer_text_color: normalizeColor(record.customer_text_color, "#ffffff"),
+      assistant_bubble_bg_color: normalizeColor(record.assistant_bubble_bg_color, "#ffffff"),
+      assistant_text_color: normalizeColor(record.assistant_text_color, "#1f2937"),
+      button_bg_color: normalizeColor(record.button_bg_color, "#8f8f8f"),
+      button_text_color: normalizeColor(record.button_text_color, "#ffffff"),
+      footer_text_color: normalizeColor(record.footer_text_color, "#99a2b2")
     };
   }
 
@@ -1087,28 +1129,28 @@ export default function HomePage() {
         <div className="panel">
           <h2>Branding</h2>
           <div className="form-grid">
-            <input className="field" value={brandingForm.logo_url} onChange={(event) => setBrandingForm({ ...brandingForm, logo_url: event.target.value })} placeholder="Logo URL" />
-            <input className="field" value={brandingForm.avatar_url} onChange={(event) => setBrandingForm({ ...brandingForm, avatar_url: event.target.value })} placeholder="Avatar URL" />
-            <input className="field" value={brandingForm.launcher_icon_url} onChange={(event) => setBrandingForm({ ...brandingForm, launcher_icon_url: event.target.value })} placeholder="Launcher icon URL" />
-            <input className="field" value={brandingForm.primary_color} onChange={(event) => setBrandingForm({ ...brandingForm, primary_color: event.target.value })} placeholder="Primary color" />
-            <input className="field" value={brandingForm.secondary_color} onChange={(event) => setBrandingForm({ ...brandingForm, secondary_color: event.target.value })} placeholder="Secondary color" />
-            <input className="field" type="number" value={brandingForm.border_radius} onChange={(event) => setBrandingForm({ ...brandingForm, border_radius: Number(event.target.value) })} placeholder="Border radius" />
-            <input className="field" value={brandingForm.font} onChange={(event) => setBrandingForm({ ...brandingForm, font: event.target.value })} placeholder="Font" />
-            <input className="field" value={brandingForm.header_style} onChange={(event) => setBrandingForm({ ...brandingForm, header_style: event.target.value })} placeholder="Header style" />
-            <input className="field" type="number" value={brandingForm.panel_width} onChange={(event) => setBrandingForm({ ...brandingForm, panel_width: Number(event.target.value) })} placeholder="Chat width" />
-            <input className="field" type="number" value={brandingForm.panel_height} onChange={(event) => setBrandingForm({ ...brandingForm, panel_height: Number(event.target.value) })} placeholder="Chat height" />
-            <input className="field" type="number" value={brandingForm.font_size} onChange={(event) => setBrandingForm({ ...brandingForm, font_size: Number(event.target.value) })} placeholder="Chat font size" />
-            <input className="field" value={brandingForm.header_bg_color} onChange={(event) => setBrandingForm({ ...brandingForm, header_bg_color: event.target.value })} placeholder="Header background" />
-            <input className="field" value={brandingForm.widget_bg_color} onChange={(event) => setBrandingForm({ ...brandingForm, widget_bg_color: event.target.value })} placeholder="Chat background" />
-            <input className="field" value={brandingForm.composer_bg_color} onChange={(event) => setBrandingForm({ ...brandingForm, composer_bg_color: event.target.value })} placeholder="Composer background" />
-            <input className="field" value={brandingForm.input_bg_color} onChange={(event) => setBrandingForm({ ...brandingForm, input_bg_color: event.target.value })} placeholder="Input background" />
-            <input className="field" value={brandingForm.customer_bubble_bg_color} onChange={(event) => setBrandingForm({ ...brandingForm, customer_bubble_bg_color: event.target.value })} placeholder="Customer reply background" />
-            <input className="field" value={brandingForm.customer_text_color} onChange={(event) => setBrandingForm({ ...brandingForm, customer_text_color: event.target.value })} placeholder="Customer text color" />
-            <input className="field" value={brandingForm.assistant_bubble_bg_color} onChange={(event) => setBrandingForm({ ...brandingForm, assistant_bubble_bg_color: event.target.value })} placeholder="Chatbot reply background" />
-            <input className="field" value={brandingForm.assistant_text_color} onChange={(event) => setBrandingForm({ ...brandingForm, assistant_text_color: event.target.value })} placeholder="Chatbot text color" />
-            <input className="field" value={brandingForm.button_bg_color} onChange={(event) => setBrandingForm({ ...brandingForm, button_bg_color: event.target.value })} placeholder="Button background" />
-            <input className="field" value={brandingForm.button_text_color} onChange={(event) => setBrandingForm({ ...brandingForm, button_text_color: event.target.value })} placeholder="Button text color" />
-            <input className="field" value={brandingForm.footer_text_color} onChange={(event) => setBrandingForm({ ...brandingForm, footer_text_color: event.target.value })} placeholder="Footer text color" />
+            <label className="field-label">Logo URL<input className="field" value={brandingForm.logo_url} onChange={(event) => setBrandingForm({ ...brandingForm, logo_url: event.target.value })} placeholder="https://..." /></label>
+            <label className="field-label">Avatar URL<input className="field" value={brandingForm.avatar_url} onChange={(event) => setBrandingForm({ ...brandingForm, avatar_url: event.target.value })} placeholder="https://..." /></label>
+            <label className="field-label">Launcher Icon URL<input className="field" value={brandingForm.launcher_icon_url} onChange={(event) => setBrandingForm({ ...brandingForm, launcher_icon_url: event.target.value })} placeholder="https://..." /></label>
+            <label className="field-label">Primary Color<input className="field" value={brandingForm.primary_color} onChange={(event) => setBrandingForm({ ...brandingForm, primary_color: event.target.value })} placeholder="#0ea5e9" /></label>
+            <label className="field-label">Secondary Color<input className="field" value={brandingForm.secondary_color} onChange={(event) => setBrandingForm({ ...brandingForm, secondary_color: event.target.value })} placeholder="#111827" /></label>
+            <label className="field-label">Corner Radius<input className="field" type="number" min={0} max={32} value={brandingForm.border_radius} onChange={(event) => setBrandingForm({ ...brandingForm, border_radius: Number(event.target.value) })} placeholder="12" /></label>
+            <label className="field-label">Font Family<input className="field" value={brandingForm.font} onChange={(event) => setBrandingForm({ ...brandingForm, font: event.target.value })} placeholder="Segoe UI" /></label>
+            <label className="field-label">Header Style<input className="field" value={brandingForm.header_style} onChange={(event) => setBrandingForm({ ...brandingForm, header_style: event.target.value })} placeholder="dark" /></label>
+            <label className="field-label">Chat Width (320-640 px)<input className="field" type="number" min={320} max={640} value={brandingForm.panel_width} onChange={(event) => setBrandingForm({ ...brandingForm, panel_width: Number(event.target.value) })} placeholder="430" /></label>
+            <label className="field-label">Chat Height (360-760 px)<input className="field" type="number" min={360} max={760} value={brandingForm.panel_height} onChange={(event) => setBrandingForm({ ...brandingForm, panel_height: Number(event.target.value) })} placeholder="560" /></label>
+            <label className="field-label">Chat Font Size (12-18 px)<input className="field" type="number" min={12} max={18} value={brandingForm.font_size} onChange={(event) => setBrandingForm({ ...brandingForm, font_size: Number(event.target.value) })} placeholder="15" /></label>
+            <label className="field-label">Header Background<input className="field" value={brandingForm.header_bg_color} onChange={(event) => setBrandingForm({ ...brandingForm, header_bg_color: event.target.value })} placeholder="#050505" /></label>
+            <label className="field-label">Chat Background<input className="field" value={brandingForm.widget_bg_color} onChange={(event) => setBrandingForm({ ...brandingForm, widget_bg_color: event.target.value })} placeholder="#f6f7f9" /></label>
+            <label className="field-label">Composer Background<input className="field" value={brandingForm.composer_bg_color} onChange={(event) => setBrandingForm({ ...brandingForm, composer_bg_color: event.target.value })} placeholder="#ffffff" /></label>
+            <label className="field-label">Input Background<input className="field" value={brandingForm.input_bg_color} onChange={(event) => setBrandingForm({ ...brandingForm, input_bg_color: event.target.value })} placeholder="#f9fafb" /></label>
+            <label className="field-label">Customer Reply Background<input className="field" value={brandingForm.customer_bubble_bg_color} onChange={(event) => setBrandingForm({ ...brandingForm, customer_bubble_bg_color: event.target.value })} placeholder="#111827" /></label>
+            <label className="field-label">Customer Text Color<input className="field" value={brandingForm.customer_text_color} onChange={(event) => setBrandingForm({ ...brandingForm, customer_text_color: event.target.value })} placeholder="#ffffff" /></label>
+            <label className="field-label">Chatbot Reply Background<input className="field" value={brandingForm.assistant_bubble_bg_color} onChange={(event) => setBrandingForm({ ...brandingForm, assistant_bubble_bg_color: event.target.value })} placeholder="#ffffff" /></label>
+            <label className="field-label">Chatbot Text Color<input className="field" value={brandingForm.assistant_text_color} onChange={(event) => setBrandingForm({ ...brandingForm, assistant_text_color: event.target.value })} placeholder="#1f2937" /></label>
+            <label className="field-label">Button Background<input className="field" value={brandingForm.button_bg_color} onChange={(event) => setBrandingForm({ ...brandingForm, button_bg_color: event.target.value })} placeholder="#8f8f8f" /></label>
+            <label className="field-label">Button Text Color<input className="field" value={brandingForm.button_text_color} onChange={(event) => setBrandingForm({ ...brandingForm, button_text_color: event.target.value })} placeholder="#ffffff" /></label>
+            <label className="field-label">Footer Text Color<input className="field" value={brandingForm.footer_text_color} onChange={(event) => setBrandingForm({ ...brandingForm, footer_text_color: event.target.value })} placeholder="#99a2b2" /></label>
           </div>
           <button className="primary" onClick={() => void save(`/clients/${clientId}/branding`, brandingForm)}>
             Save Branding
