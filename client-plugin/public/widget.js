@@ -33,6 +33,7 @@
     token: null,
     bootstrapPromise: null,
     conversationId: null,
+    booting: false,
     resumeToken: loadStorage("resume_token"),
     cachedConfigVersion: Number(loadStorage("config_version") || 0),
     cachedConfig: loadStorage("widget_config"),
@@ -140,6 +141,7 @@
 
   function setUnavailableState(message) {
     state.bootFailed = true;
+    state.booting = false;
     setComposerDisabled(true);
     hideInlineForm();
     actions.innerHTML = "";
@@ -153,7 +155,7 @@
         label: "Retry",
         onClick: function () {
           state.bootFailed = false;
-          setComposerDisabled(false);
+          state.conversationId = null;
           actions.style.display = "none";
           messages.innerHTML = "";
           void boot();
@@ -732,6 +734,10 @@
       setUnavailableState("Chat is temporarily unavailable. Please retry in a moment.");
       return Promise.resolve();
     }
+    if (state.booting || !state.conversationId) {
+      addMessage("assistant", "The assistant is still connecting. Please try again in a moment.");
+      return Promise.resolve();
+    }
     addMessage("user", text);
     return getCaptchaToken("chat")
       .then(function (captchaToken) {
@@ -769,11 +775,15 @@
   }
 
   function boot() {
-    setComposerDisabled(false);
+    state.booting = true;
+    state.conversationId = null;
+    setComposerDisabled(true);
     return bootstrapPlugin()
       .then(loadConfig)
       .then(createOrResumeSession)
       .then(function () {
+        state.booting = false;
+        setComposerDisabled(false);
         const greeting = (state.config && state.config.out_of_hours && state.config.out_of_hours.enabled && state.config.out_of_hours.greeting) || (state.config && state.config.widget && state.config.widget.greeting) || "Hi, how can I help you today?";
         addMessage("assistant", greeting);
         if (!state.embedded && state.config && state.config.widget && state.config.widget.auto_open) {
@@ -783,6 +793,7 @@
         }
       })
       .catch(function (error) {
+        state.booting = false;
         console.error(error);
         setUnavailableState("Chat is temporarily unavailable. Please try again or use the contact options on this page.");
       });
