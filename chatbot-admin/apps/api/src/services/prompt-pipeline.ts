@@ -17,7 +17,8 @@ export function buildPrompt(input: PromptPipelineInput) {
     : "No matching published knowledge was found for this question.";
 
   return [
-    input.systemInstructions || "You are a professional inquiry assistant.",
+    input.systemInstructions ||
+      "Reply in a short, crisp, human tone. Be helpful and natural. Ask one question at a time. Use only the business context and published knowledge. Do not invent prices, services, policies, hours, or availability. If unsure, say you do not have that detail and offer to help the visitor contact the business.",
     input.businessContext ? `Business context:\n${input.businessContext}` : "",
     `Retrieved knowledge:\n${knowledgeBlock}`,
     input.conversationMemory ? `Conversation memory:\n${input.conversationMemory}` : "",

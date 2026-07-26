@@ -119,6 +119,9 @@ const defaultChatbotCss = `.wcp-chatbot-panel {
   border-radius: 10px !important;
 }`;
 
+const defaultMasterReplyPrompt =
+  "Reply in a short, crisp, human tone. Be helpful and natural. Ask one question at a time. Use only the business context and published knowledge. Do not invent prices, services, policies, hours, or availability. If unsure, say you do not have that detail and offer to help the visitor contact the business.";
+
 const clientOptionalSections = new Set<Section>(["platform", "health"]);
 
 async function apiFetch(path: string, token: string, init?: RequestInit) {
@@ -516,7 +519,7 @@ export default function HomePage() {
           setBrandingForm((current) => ({ ...current, ...branding.data, custom_css: branding.data.custom_css ?? current.custom_css }));
         }
         if (widget?.data) {
-          setWidgetForm(widget.data);
+          setWidgetForm((current) => ({ ...current, ...widget.data }));
         }
         if (ai?.data) {
           setAiForm(ai.data);
@@ -1236,8 +1239,20 @@ export default function HomePage() {
           <h2>AI Settings</h2>
           <div className="form-grid">
             <input className="field" value={aiForm.primary_model} onChange={(event) => setAiForm({ ...aiForm, primary_model: event.target.value })} placeholder="Primary model" />
-            <textarea className="field" rows={5} value={aiForm.system_instructions} onChange={(event) => setAiForm({ ...aiForm, system_instructions: event.target.value })} placeholder="System instructions" />
+            <label className="field-label full-width">
+              Master Reply Prompt
+              <textarea
+                className="field"
+                rows={7}
+                value={aiForm.system_instructions}
+                onChange={(event) => setAiForm({ ...aiForm, system_instructions: event.target.value })}
+                placeholder={defaultMasterReplyPrompt}
+              />
+            </label>
           </div>
+          <button className="secondary" type="button" onClick={() => setAiForm({ ...aiForm, system_instructions: defaultMasterReplyPrompt })}>
+            Use Short Human Prompt
+          </button>
           <button className="primary" onClick={() => void save(`/clients/${clientId}/ai-settings`, aiForm)}>
             Save AI Settings
           </button>

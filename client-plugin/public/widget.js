@@ -37,6 +37,7 @@
     booting: false,
     resumeToken: loadStorage("resume_token"),
     cachedConfigVersion: Number(loadStorage("config_version") || 0),
+    cachedPluginVersion: loadStorage("plugin_version"),
     cachedConfig: loadStorage("widget_config"),
     config: null,
     open: false,
@@ -778,7 +779,7 @@
     const businessName = cleanDisplayName(state.config.business && state.config.business.name ? state.config.business.name : "");
     const siteName = cleanDisplayName(window.WCP_CONFIG.siteName || "");
     const title = cleanDisplayName(state.config.widget.header_title || "") || businessName || siteName || "Assistant";
-    const subtitle = cleanDisplayName(state.config.widget.header_description || "") || cleanDisplayName(window.WCP_CONFIG.siteTagline || "");
+    const subtitle = cleanDisplayName(state.config.widget.header_description || "");
     const footerCopy = String(state.config.widget.footer_text || "").trim();
     headerTitle.textContent = title;
     headerSubtitle.textContent = subtitle;
@@ -922,7 +923,7 @@
       }
     }
 
-    if (state.config && state.config.config_version === state.cachedConfigVersion) {
+    if (state.config && state.config.config_version === state.cachedConfigVersion && state.cachedPluginVersion === window.WCP_CONFIG.pluginVersion) {
       applyConfig();
       return Promise.resolve();
     }
@@ -938,7 +939,9 @@
         state.config = payload.data;
         saveStorage("widget_config", JSON.stringify(payload.data));
         saveStorage("config_version", String(payload.data.config_version || 0));
+        saveStorage("plugin_version", window.WCP_CONFIG.pluginVersion || "");
         state.cachedConfigVersion = Number(payload.data.config_version || 0);
+        state.cachedPluginVersion = window.WCP_CONFIG.pluginVersion || "";
         state.cachedConfig = JSON.stringify(payload.data);
         applyConfig();
       });
