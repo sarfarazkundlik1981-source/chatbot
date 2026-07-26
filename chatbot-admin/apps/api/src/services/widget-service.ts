@@ -35,6 +35,22 @@ export async function getWidgetConfig(clientId: string) {
     result[key] = capabilitySet.has(key) && entitlementMap.get(key) !== false && flagMap.get(key) !== false;
     return result;
   }, {});
+  const isFeatureCtaAllowed = (kind: string) => {
+    const normalizedKind = kind.toLowerCase();
+    if (normalizedKind === "callback") {
+      return Boolean(callbackConfig?.enabled);
+    }
+    if (normalizedKind === "appointment" || normalizedKind === "booking") {
+      return Boolean(appointmentConfig?.enabled);
+    }
+    if (normalizedKind === "service-area") {
+      return Boolean(serviceAreaConfig?.enabled);
+    }
+    if (normalizedKind === "quote") {
+      return Boolean(quoteConfig?.enabled);
+    }
+    return true;
+  };
 
   return {
     config_version: await getLatestConfigVersion(clientId),
@@ -79,7 +95,7 @@ export async function getWidgetConfig(clientId: string) {
     },
     feature_flags: Object.fromEntries(featureFlags.map((flag: { key: string; enabled: boolean }) => [flag.key, flag.enabled])),
     effective_features: effectiveFeatures,
-    ctas: ctas.map((cta: { label: string; url: string; kind: string }) => ({
+    ctas: ctas.filter((cta: { kind: string }) => isFeatureCtaAllowed(cta.kind)).map((cta: { label: string; url: string; kind: string }) => ({
       label: cta.label,
       url: cta.url,
       kind: cta.kind as "contact" | "whatsapp" | "call" | "booking" | "custom"

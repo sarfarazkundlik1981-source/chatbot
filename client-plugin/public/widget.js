@@ -240,9 +240,9 @@
 
   function setPanelVisibility(open) {
     state.open = open;
-    panel.style.display = open ? "flex" : "none";
+    panel.style.setProperty("display", open ? "flex" : "none", "important");
     if (state.isPopupMode) {
-      backdrop.style.display = open ? "block" : "none";
+      backdrop.style.setProperty("display", open ? "block" : "none", "important");
       document.body.style.overflow = open ? "hidden" : "";
     }
   }
@@ -1090,15 +1090,20 @@
     setPanelVisibility(!state.open);
   });
 
-    backdrop.addEventListener("click", function () {
+  backdrop.addEventListener("click", function (event) {
+    event.preventDefault();
     setPanelVisibility(false);
   });
 
-  minimizeButton.addEventListener("click", function () {
+  minimizeButton.addEventListener("click", function (event) {
+    event.preventDefault();
+    event.stopPropagation();
     setPanelVisibility(false);
   });
 
-  closeButton.addEventListener("click", function () {
+  closeButton.addEventListener("click", function (event) {
+    event.preventDefault();
+    event.stopPropagation();
     setPanelVisibility(false);
   });
 

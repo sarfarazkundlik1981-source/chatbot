@@ -300,7 +300,24 @@ export async function sendChatMessage(clientId: string, conversationId: string, 
     await eventBus.emit({ type: "unanswered_question.detected", clientId, conversationId });
   }
 
-  const ctaOptions = ctas.map((cta) => ({ label: cta.label, url: cta.url, kind: cta.kind }));
+  function isFeatureCtaAllowed(kind: string) {
+    const normalizedKind = kind.toLowerCase();
+    if (normalizedKind === "callback") {
+      return Boolean(callbackConfig?.enabled);
+    }
+    if (normalizedKind === "appointment" || normalizedKind === "booking") {
+      return Boolean(appointmentConfig?.enabled);
+    }
+    if (normalizedKind === "service-area") {
+      return Boolean(serviceAreaConfig?.enabled);
+    }
+    if (normalizedKind === "quote") {
+      return Boolean(quoteConfig?.enabled);
+    }
+    return true;
+  }
+
+  const ctaOptions = ctas.filter((cta) => isFeatureCtaAllowed(cta.kind)).map((cta) => ({ label: cta.label, url: cta.url, kind: cta.kind }));
   if (callbackConfig?.enabled) {
     ctaOptions.push({ label: callbackConfig.buttonLabel, url: "#callback-request", kind: "callback" });
   }
