@@ -38,6 +38,7 @@ type BrandingInput = {
   button_bg_color: string;
   button_text_color: string;
   footer_text_color: string;
+  custom_css?: string;
   version?: number;
 };
 
@@ -253,6 +254,7 @@ export async function upsertBranding(clientId: string, input: BrandingInput, act
       buttonBgColor: input.button_bg_color,
       buttonTextColor: input.button_text_color,
       footerTextColor: input.footer_text_color,
+      customCss: input.custom_css,
       version: { increment: 1 }
     },
     create: {
@@ -279,7 +281,8 @@ export async function upsertBranding(clientId: string, input: BrandingInput, act
       assistantTextColor: input.assistant_text_color,
       buttonBgColor: input.button_bg_color,
       buttonTextColor: input.button_text_color,
-      footerTextColor: input.footer_text_color
+      footerTextColor: input.footer_text_color,
+      customCss: input.custom_css
     }
   });
 
@@ -636,6 +639,21 @@ export async function rollbackConfigVersion(clientId: string, versionNumber: num
           borderRadius: snapshot.branding.borderRadius,
           font: snapshot.branding.font,
           headerStyle: snapshot.branding.headerStyle,
+          panelWidth: snapshot.branding.panelWidth ?? 430,
+          panelHeight: snapshot.branding.panelHeight ?? 560,
+          fontSize: snapshot.branding.fontSize ?? 15,
+          headerBgColor: snapshot.branding.headerBgColor ?? "#050505",
+          widgetBgColor: snapshot.branding.widgetBgColor ?? "#f6f7f9",
+          composerBgColor: snapshot.branding.composerBgColor ?? "#ffffff",
+          inputBgColor: snapshot.branding.inputBgColor ?? "#f9fafb",
+          customerBubbleBgColor: snapshot.branding.customerBubbleBgColor ?? "#111827",
+          customerTextColor: snapshot.branding.customerTextColor ?? "#ffffff",
+          assistantBubbleBgColor: snapshot.branding.assistantBubbleBgColor ?? "#ffffff",
+          assistantTextColor: snapshot.branding.assistantTextColor ?? "#1f2937",
+          buttonBgColor: snapshot.branding.buttonBgColor ?? "#8f8f8f",
+          buttonTextColor: snapshot.branding.buttonTextColor ?? "#ffffff",
+          footerTextColor: snapshot.branding.footerTextColor ?? "#99a2b2",
+          customCss: snapshot.branding.customCss ?? null,
           version: { increment: 1 }
         },
         create: {
@@ -647,7 +665,22 @@ export async function rollbackConfigVersion(clientId: string, versionNumber: num
           secondaryColor: snapshot.branding.secondaryColor,
           borderRadius: snapshot.branding.borderRadius,
           font: snapshot.branding.font,
-          headerStyle: snapshot.branding.headerStyle
+          headerStyle: snapshot.branding.headerStyle,
+          panelWidth: snapshot.branding.panelWidth ?? 430,
+          panelHeight: snapshot.branding.panelHeight ?? 560,
+          fontSize: snapshot.branding.fontSize ?? 15,
+          headerBgColor: snapshot.branding.headerBgColor ?? "#050505",
+          widgetBgColor: snapshot.branding.widgetBgColor ?? "#f6f7f9",
+          composerBgColor: snapshot.branding.composerBgColor ?? "#ffffff",
+          inputBgColor: snapshot.branding.inputBgColor ?? "#f9fafb",
+          customerBubbleBgColor: snapshot.branding.customerBubbleBgColor ?? "#111827",
+          customerTextColor: snapshot.branding.customerTextColor ?? "#ffffff",
+          assistantBubbleBgColor: snapshot.branding.assistantBubbleBgColor ?? "#ffffff",
+          assistantTextColor: snapshot.branding.assistantTextColor ?? "#1f2937",
+          buttonBgColor: snapshot.branding.buttonBgColor ?? "#8f8f8f",
+          buttonTextColor: snapshot.branding.buttonTextColor ?? "#ffffff",
+          footerTextColor: snapshot.branding.footerTextColor ?? "#99a2b2",
+          customCss: snapshot.branding.customCss ?? null
         }
       });
     }

@@ -44,6 +44,7 @@ export function serializeBrandingSettings(settings: {
   buttonBgColor: string;
   buttonTextColor: string;
   footerTextColor: string;
+  customCss: string | null;
   version: number;
   updatedAt: Date;
 }) {
@@ -71,6 +72,7 @@ export function serializeBrandingSettings(settings: {
     button_bg_color: settings.buttonBgColor,
     button_text_color: settings.buttonTextColor,
     footer_text_color: settings.footerTextColor,
+    custom_css: settings.customCss,
     version: settings.version,
     updated_at: settings.updatedAt.toISOString()
   };

@@ -267,6 +267,7 @@ model BrandingSettings {
   buttonBgColor  String   @default("#8f8f8f")
   buttonTextColor String  @default("#ffffff")
   footerTextColor String  @default("#99a2b2")
+  customCss      String?
   version        Int      @default(1)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt

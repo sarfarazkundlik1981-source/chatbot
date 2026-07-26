@@ -80,6 +80,7 @@ const brandingSchema = z.object({
   button_bg_color: z.string().min(4),
   button_text_color: z.string().min(4),
   footer_text_color: z.string().min(4),
+  custom_css: z.string().max(12000).optional(),
   version: z.number().int().optional()
 });
 

@@ -64,7 +64,8 @@ export async function getWidgetConfig(clientId: string) {
       assistant_text_color: branding?.assistantTextColor ?? "#1f2937",
       button_bg_color: branding?.buttonBgColor ?? "#8f8f8f",
       button_text_color: branding?.buttonTextColor ?? "#ffffff",
-      footer_text_color: branding?.footerTextColor ?? "#99a2b2"
+      footer_text_color: branding?.footerTextColor ?? "#99a2b2",
+      custom_css: branding?.customCss ?? ""
     },
     widget: {
       position: widgetSettings?.position ?? "bottom-right",

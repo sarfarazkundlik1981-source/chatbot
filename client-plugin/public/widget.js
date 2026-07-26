@@ -122,6 +122,26 @@
   const input = createBox("input", "flex:1;min-width:0;padding:8px 0;border:none;background:transparent;color:#111827;font:400 15px/1.35 'Segoe UI',Arial,sans-serif;outline:none");
   const send = createBox("button", "width:32px;height:32px;border:none;border-radius:10px;background:#8f8f8f;color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:15px;flex:0 0 auto");
   const footer = createBox("div", "padding:0 10px 10px;background:#fff;color:#99a2b2;text-align:center;font:500 12px/1.2 'Segoe UI',Arial,sans-serif");
+  const customStyle = createBox("style", "");
+
+  launcher.className = "wcp-chatbot-launcher";
+  panel.className = "wcp-chatbot-panel";
+  header.className = "wcp-chatbot-header";
+  headerIcon.className = "wcp-chatbot-header-icon";
+  headerTitle.className = "wcp-chatbot-title";
+  headerSubtitle.className = "wcp-chatbot-subtitle";
+  minimizeButton.className = "wcp-chatbot-minimize";
+  closeButton.className = "wcp-chatbot-close";
+  messages.className = "wcp-chatbot-messages";
+  actions.className = "wcp-chatbot-actions";
+  tools.className = "wcp-chatbot-tools";
+  formHost.className = "wcp-chatbot-form-host";
+  composerWrap.className = "wcp-chatbot-composer-wrap";
+  composer.className = "wcp-chatbot-composer";
+  input.className = "wcp-chatbot-input";
+  send.className = "wcp-chatbot-send";
+  footer.className = "wcp-chatbot-footer";
+  customStyle.id = "wcp-chatbot-custom-css";
 
   input.type = "text";
   input.placeholder = "Type a message...";
@@ -176,6 +196,7 @@
           : `background:${assistantBubbleBg};color:${assistantText};align-self:flex-start;white-space:pre-wrap;border:1px solid #dfe4ec;box-shadow:0 2px 8px rgba(15,23,42,.06);border-bottom-left-radius:8px`
       ].join(";")
     );
+    bubble.className = role === "user" ? "wcp-chatbot-message wcp-chatbot-message-user" : "wcp-chatbot-message wcp-chatbot-message-assistant";
     bubble.textContent = text;
     messages.appendChild(bubble);
     messages.scrollTop = messages.scrollHeight;
@@ -236,6 +257,10 @@
       const button = createBox("button", "max-width:100%;padding:8px 11px;border:1px solid #d8deea;border-radius:10px;background:#fff;color:#1f2937;cursor:pointer;font:600 13px/1.2 'Segoe UI',Arial,sans-serif;white-space:normal;text-align:left");
       button.type = "button";
       button.textContent = buttonConfig.label;
+      if (buttonConfig.kind) {
+        button.dataset.wcpFeatureKind = buttonConfig.kind;
+      }
+      button.className = buttonConfig.kind ? "wcp-chatbot-action wcp-chatbot-feature-action" : "wcp-chatbot-action";
       button.addEventListener("click", buttonConfig.onClick);
       container.appendChild(button);
     });
@@ -406,6 +431,7 @@
     const inputs = {};
     fields.forEach(function (field) {
       const element = field.multiline ? createBox("textarea", "padding:10px 12px;border-radius:12px;border:1px solid #d8deea;background:#fff;color:#111827;font:400 13px/1.4 'Segoe UI',sans-serif") : createBox("input", "padding:10px 12px;border-radius:12px;border:1px solid #d8deea;background:#fff;color:#111827;font:400 13px/1.4 'Segoe UI',sans-serif");
+      element.className = "wcp-chatbot-form-field";
       if (!field.multiline) {
         element.type = field.type || "text";
       }
@@ -417,6 +443,7 @@
       form.appendChild(element);
     });
     const submit = createBox("button", `padding:10px 14px;border:none;border-radius:12px;background:${appearanceColor("button_bg_color", "#050505")};color:${appearanceColor("button_text_color", "#ffffff")};cursor:pointer;font:600 13px/1.2 'Segoe UI',Arial,sans-serif`);
+    submit.className = "wcp-chatbot-form-submit";
     submit.type = "submit";
     submit.textContent = "Submit";
     form.appendChild(submit);
@@ -445,6 +472,7 @@
     const buttons = [];
     if (state.config.callback_request && state.config.callback_request.enabled) {
       buttons.push({
+        kind: "callback",
         label: state.config.callback_request.button_label || "Request a call",
         onClick: function () {
           showInlineForm(
@@ -482,6 +510,7 @@
 
     if (state.config.appointment_request && state.config.appointment_request.enabled) {
       buttons.push({
+        kind: "appointment",
         label: state.config.appointment_request.title || "Request appointment",
         onClick: function () {
           showInlineForm(
@@ -525,6 +554,7 @@
 
     if (state.config.service_area && state.config.service_area.enabled) {
       buttons.push({
+        kind: "service-area",
         label: "Check service area",
         onClick: function () {
           showInlineForm("Check service area", [{ key: "query", label: state.config.service_area.input_label || "Enter your city or ZIP" }], function (values) {
@@ -555,6 +585,7 @@
 
     if (state.config.quote_calculator && state.config.quote_calculator.enabled) {
       buttons.push({
+        kind: "quote",
         label: state.config.quote_calculator.title || "Instant quote",
         onClick: function () {
           const fields = (state.config.quote_calculator.fields || []).map(function (field) {
@@ -636,6 +667,17 @@
     return value || fallback;
   }
 
+  function applyCustomCss() {
+    const css = state.config && state.config.branding ? String(state.config.branding.custom_css || "").trim() : "";
+    customStyle.textContent = css;
+    if (css && !customStyle.parentNode) {
+      document.head.appendChild(customStyle);
+    }
+    if (!css && customStyle.parentNode) {
+      customStyle.parentNode.removeChild(customStyle);
+    }
+  }
+
   function applyConfig() {
     if (!state.config) {
       return;
@@ -687,9 +729,35 @@
       panel.style.right = "auto";
     }
     renderFeatureTools();
+    applyCustomCss();
   }
 
   function renderRuntimeCtas(ctas) {
+    function clickFeatureTool(kind) {
+      const button = tools.querySelector('button[data-wcp-feature-kind="' + kind + '"]');
+      if (button) {
+        button.click();
+        return true;
+      }
+      return false;
+    }
+
+    function openCtaUrl(cta) {
+      const url = String((cta && cta.url) || "").trim();
+      if (!url || url.charAt(0) === "#") {
+        return false;
+      }
+      window.open(url, "_blank", "noopener,noreferrer");
+      return true;
+    }
+
+    function handleFeatureCta(kind, cta) {
+      if (clickFeatureTool(kind) || openCtaUrl(cta)) {
+        return;
+      }
+      addMessage("assistant", "This action is not configured yet. Please contact the business directly.");
+    }
+
     renderButtons(
       actions,
       (ctas || []).map(function (cta) {
@@ -697,33 +765,20 @@
           label: cta.label,
           onClick: function () {
             if (cta.kind === "callback") {
-              const button = Array.from(tools.querySelectorAll("button")).find(function (element) {
-                return element.textContent === cta.label;
-              });
-              if (button) {
-                button.click();
-              }
+              handleFeatureCta("callback", cta);
               return;
             }
             if (cta.kind === "appointment") {
-              const button = Array.from(tools.querySelectorAll("button")).find(function (element) {
-                return element.textContent === cta.label;
-              });
-              if (button) {
-                button.click();
-              }
+              handleFeatureCta("appointment", cta);
               return;
             }
             if (cta.kind === "service-area" || cta.kind === "quote") {
-              const button = Array.from(tools.querySelectorAll("button")).find(function (element) {
-                return element.textContent === cta.label;
-              });
-              if (button) {
-                button.click();
-              }
+              handleFeatureCta(cta.kind, cta);
               return;
             }
-            window.open(cta.url, "_blank", "noopener,noreferrer");
+            if (!openCtaUrl(cta)) {
+              addMessage("assistant", "This action is not configured yet. Please contact the business directly.");
+            }
           }
         };
       })

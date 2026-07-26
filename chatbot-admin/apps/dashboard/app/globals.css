@@ -216,6 +216,15 @@ select.field {
   max-width: 360px;
 }
 
+.css-editor {
+  min-height: 420px;
+  resize: vertical;
+  font-family: "Cascadia Code", "Fira Code", Consolas, monospace;
+  font-size: 0.86rem;
+  line-height: 1.55;
+  white-space: pre;
+}
+
 .primary,
 .secondary,
 .nav-link {

@@ -69,6 +69,39 @@ const sectionMeta: Record<Section, { label: string; description: string }> = {
   platform: { label: "Platform Admin", description: "Global client management, releases, compatibility, and security events." }
 };
 
+const defaultChatbotCss = `.wcp-chatbot-panel {
+  width: 430px !important;
+  height: min(560px, calc(100vh - 96px)) !important;
+  background: #f6f7f9 !important;
+  border-radius: 18px !important;
+}
+
+.wcp-chatbot-header {
+  background: #050505 !important;
+}
+
+.wcp-chatbot-message-assistant {
+  background: #ffffff !important;
+  color: #1f2937 !important;
+  font-size: 15px !important;
+}
+
+.wcp-chatbot-message-user {
+  background: #111827 !important;
+  color: #ffffff !important;
+  font-size: 15px !important;
+}
+
+.wcp-chatbot-input {
+  font-size: 15px !important;
+}
+
+.wcp-chatbot-send,
+.wcp-chatbot-action {
+  background: #8f8f8f !important;
+  color: #ffffff !important;
+}`;
+
 const clientOptionalSections = new Set<Section>(["platform", "health"]);
 
 async function apiFetch(path: string, token: string, init?: RequestInit) {
@@ -185,7 +218,8 @@ function normalizeRequestBody(path: string, body: unknown) {
       assistant_text_color: normalizeColor(record.assistant_text_color, "#1f2937"),
       button_bg_color: normalizeColor(record.button_bg_color, "#8f8f8f"),
       button_text_color: normalizeColor(record.button_text_color, "#ffffff"),
-      footer_text_color: normalizeColor(record.footer_text_color, "#99a2b2")
+      footer_text_color: normalizeColor(record.footer_text_color, "#99a2b2"),
+      custom_css: String(record.custom_css ?? "").trim()
     };
   }
 
@@ -282,6 +316,7 @@ export default function HomePage() {
     button_bg_color: "#8f8f8f",
     button_text_color: "#ffffff",
     footer_text_color: "#99a2b2",
+    custom_css: defaultChatbotCss,
     version: 1
   });
   const [widgetForm, setWidgetForm] = useState({
@@ -449,7 +484,7 @@ export default function HomePage() {
           setSettingsForm(settings.data);
         }
         if (branding?.data) {
-          setBrandingForm(branding.data);
+          setBrandingForm((current) => ({ ...current, ...branding.data, custom_css: branding.data.custom_css ?? current.custom_css }));
         }
         if (widget?.data) {
           setWidgetForm(widget.data);
@@ -1128,30 +1163,24 @@ export default function HomePage() {
 
         <div className="panel">
           <h2>Branding</h2>
-          <div className="form-grid">
+          <div className="form-grid branding-assets">
             <label className="field-label">Logo URL<input className="field" value={brandingForm.logo_url} onChange={(event) => setBrandingForm({ ...brandingForm, logo_url: event.target.value })} placeholder="https://..." /></label>
             <label className="field-label">Avatar URL<input className="field" value={brandingForm.avatar_url} onChange={(event) => setBrandingForm({ ...brandingForm, avatar_url: event.target.value })} placeholder="https://..." /></label>
             <label className="field-label">Launcher Icon URL<input className="field" value={brandingForm.launcher_icon_url} onChange={(event) => setBrandingForm({ ...brandingForm, launcher_icon_url: event.target.value })} placeholder="https://..." /></label>
-            <label className="field-label">Primary Color<input className="field" value={brandingForm.primary_color} onChange={(event) => setBrandingForm({ ...brandingForm, primary_color: event.target.value })} placeholder="#0ea5e9" /></label>
-            <label className="field-label">Secondary Color<input className="field" value={brandingForm.secondary_color} onChange={(event) => setBrandingForm({ ...brandingForm, secondary_color: event.target.value })} placeholder="#111827" /></label>
-            <label className="field-label">Corner Radius<input className="field" type="number" min={0} max={32} value={brandingForm.border_radius} onChange={(event) => setBrandingForm({ ...brandingForm, border_radius: Number(event.target.value) })} placeholder="12" /></label>
-            <label className="field-label">Font Family<input className="field" value={brandingForm.font} onChange={(event) => setBrandingForm({ ...brandingForm, font: event.target.value })} placeholder="Segoe UI" /></label>
-            <label className="field-label">Header Style<input className="field" value={brandingForm.header_style} onChange={(event) => setBrandingForm({ ...brandingForm, header_style: event.target.value })} placeholder="dark" /></label>
-            <label className="field-label">Chat Width (320-640 px)<input className="field" type="number" min={320} max={640} value={brandingForm.panel_width} onChange={(event) => setBrandingForm({ ...brandingForm, panel_width: Number(event.target.value) })} placeholder="430" /></label>
-            <label className="field-label">Chat Height (360-760 px)<input className="field" type="number" min={360} max={760} value={brandingForm.panel_height} onChange={(event) => setBrandingForm({ ...brandingForm, panel_height: Number(event.target.value) })} placeholder="560" /></label>
-            <label className="field-label">Chat Font Size (12-18 px)<input className="field" type="number" min={12} max={18} value={brandingForm.font_size} onChange={(event) => setBrandingForm({ ...brandingForm, font_size: Number(event.target.value) })} placeholder="15" /></label>
-            <label className="field-label">Header Background<input className="field" value={brandingForm.header_bg_color} onChange={(event) => setBrandingForm({ ...brandingForm, header_bg_color: event.target.value })} placeholder="#050505" /></label>
-            <label className="field-label">Chat Background<input className="field" value={brandingForm.widget_bg_color} onChange={(event) => setBrandingForm({ ...brandingForm, widget_bg_color: event.target.value })} placeholder="#f6f7f9" /></label>
-            <label className="field-label">Composer Background<input className="field" value={brandingForm.composer_bg_color} onChange={(event) => setBrandingForm({ ...brandingForm, composer_bg_color: event.target.value })} placeholder="#ffffff" /></label>
-            <label className="field-label">Input Background<input className="field" value={brandingForm.input_bg_color} onChange={(event) => setBrandingForm({ ...brandingForm, input_bg_color: event.target.value })} placeholder="#f9fafb" /></label>
-            <label className="field-label">Customer Reply Background<input className="field" value={brandingForm.customer_bubble_bg_color} onChange={(event) => setBrandingForm({ ...brandingForm, customer_bubble_bg_color: event.target.value })} placeholder="#111827" /></label>
-            <label className="field-label">Customer Text Color<input className="field" value={brandingForm.customer_text_color} onChange={(event) => setBrandingForm({ ...brandingForm, customer_text_color: event.target.value })} placeholder="#ffffff" /></label>
-            <label className="field-label">Chatbot Reply Background<input className="field" value={brandingForm.assistant_bubble_bg_color} onChange={(event) => setBrandingForm({ ...brandingForm, assistant_bubble_bg_color: event.target.value })} placeholder="#ffffff" /></label>
-            <label className="field-label">Chatbot Text Color<input className="field" value={brandingForm.assistant_text_color} onChange={(event) => setBrandingForm({ ...brandingForm, assistant_text_color: event.target.value })} placeholder="#1f2937" /></label>
-            <label className="field-label">Button Background<input className="field" value={brandingForm.button_bg_color} onChange={(event) => setBrandingForm({ ...brandingForm, button_bg_color: event.target.value })} placeholder="#8f8f8f" /></label>
-            <label className="field-label">Button Text Color<input className="field" value={brandingForm.button_text_color} onChange={(event) => setBrandingForm({ ...brandingForm, button_text_color: event.target.value })} placeholder="#ffffff" /></label>
-            <label className="field-label">Footer Text Color<input className="field" value={brandingForm.footer_text_color} onChange={(event) => setBrandingForm({ ...brandingForm, footer_text_color: event.target.value })} placeholder="#99a2b2" /></label>
+            <label className="field-label full-width">
+              Chatbot CSS
+              <textarea
+                className="field css-editor"
+                rows={18}
+                value={brandingForm.custom_css}
+                onChange={(event) => setBrandingForm({ ...brandingForm, custom_css: event.target.value })}
+                spellCheck={false}
+              />
+            </label>
           </div>
+          <button className="secondary" type="button" onClick={() => setBrandingForm({ ...brandingForm, custom_css: defaultChatbotCss })}>
+            Reset CSS Template
+          </button>
           <button className="primary" onClick={() => void save(`/clients/${clientId}/branding`, brandingForm)}>
             Save Branding
           </button>
