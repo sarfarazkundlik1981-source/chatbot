@@ -277,9 +277,9 @@ function wcp_enqueue_assets(): void
 }
 add_action('wp_enqueue_scripts', 'wcp_enqueue_assets');
 
-function wcp_backend_request(string $path, array $body, array $headers = [])
+function wcp_backend_request(string $path, array $body, array $headers = [], ?array $settingsOverride = null)
 {
-    $settings = wcp_get_settings();
+    $settings = $settingsOverride ?: wcp_get_settings();
     $backend_url = untrailingslashit((string) ($settings['backend_url'] ?? ''));
     if (!$backend_url || empty($settings['client_id']) || empty($settings['client_secret'])) {
         return new WP_Error('wcp_not_configured', 'Connector settings are incomplete.');
@@ -298,9 +298,11 @@ function wcp_backend_request(string $path, array $body, array $headers = [])
     }
 
     $payload = json_decode((string) wp_remote_retrieve_body($response), true);
+    $rawBody = (string) wp_remote_retrieve_body($response);
     return [
         'status' => (int) wp_remote_retrieve_response_code($response),
         'payload' => is_array($payload) ? $payload : [],
+        'raw_body' => $rawBody,
     ];
 }
 
@@ -395,7 +397,7 @@ function wcp_run_connection_test(?array $settingsOverride = null)
         'elementor_version' => defined('ELEMENTOR_VERSION') ? ELEMENTOR_VERSION : '',
     ], [
         'Idempotency-Key' => 'verify-' . md5($domain . '|' . WCP_PLUGIN_VERSION . '|manual-test'),
-    ]);
+    ], $settings);
 
     if (is_wp_error($result)) {
         return $result;
@@ -404,10 +406,11 @@ function wcp_run_connection_test(?array $settingsOverride = null)
     if (($result['status'] ?? 500) >= 400 || empty($result['payload']['success'])) {
         return new WP_Error(
             'wcp_verify_failed',
-            (string) ($result['payload']['error']['message'] ?? 'Plugin verification failed.'),
+            (string) ($result['payload']['error']['message'] ?? ('Plugin verification failed with status ' . (int) ($result['status'] ?? 500) . '.')),
             [
                 'status' => (int) ($result['status'] ?? 500),
                 'payload' => $result['payload'],
+                'raw_body' => $result['raw_body'] ?? '',
             ]
         );
     }
