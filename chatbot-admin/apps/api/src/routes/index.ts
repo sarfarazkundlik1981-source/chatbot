@@ -8,12 +8,10 @@ import { dashboardRouter } from "./dashboard.js";
 import { featuresRouter } from "./features.js";
 import { healthRouter } from "./health.js";
 import { opsRouter } from "./ops.js";
-import { pluginRouter } from "./plugin.js";
 
 export const apiRouter = Router();
 
 apiRouter.use("/health", healthRouter);
-apiRouter.use("/plugin", pluginRouter);
 apiRouter.use("/", authRouter);
 apiRouter.use("/", adminRouter);
 apiRouter.use("/", clientRouter);

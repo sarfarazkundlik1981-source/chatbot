@@ -3,6 +3,7 @@ import express from "express";
 import helmet from "helmet";
 
 import { apiRouter } from "./routes/index.js";
+import { pluginRouter } from "./routes/plugin.js";
 import { httpLogger } from "./lib/observability.js";
 import { requestContext } from "./lib/request-context.js";
 import { sendError } from "./lib/api-response.js";
@@ -13,15 +14,15 @@ export function createApp(): express.Express {
   const app = express();
 
   app.use(helmet());
-  app.use(cors({ origin: [env.DASHBOARD_URL] }));
   app.use(express.json({ limit: env.PUBLIC_JSON_BODY_LIMIT }));
   app.use(requestContext);
   app.use(httpLogger);
   app.use("/api/v1/auth/login", rateLimit(20, 60 * 60 * 1000));
   app.use("/api/v1/plugin/verify", rateLimit(30, 60 * 60 * 1000));
   app.use("/api/v1/plugin/heartbeat", rateLimit(10, 24 * 60 * 60 * 1000));
+  app.use("/api/v1/plugin", cors({ origin: true }), pluginRouter);
 
-  app.use("/api/v1", apiRouter);
+  app.use("/api/v1", cors({ origin: [env.DASHBOARD_URL] }), apiRouter);
 
   app.use((_req, res) => sendError(res, 404, "NOT_FOUND", "Route not found."));
   app.use((error: Error & { type?: string; status?: number }, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
