@@ -2,6 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 
 import { sendError, sendSuccess } from "../lib/api-response.js";
+import { AppError } from "../lib/errors.js";
 import { requireAuth, requireClientAccess, requireClientRole } from "../middleware/auth.js";
 import {
   createKnowledgeEntry,
@@ -25,7 +26,27 @@ import {
   upsertWidgetSettings,
   updateKnowledgeEntry
 } from "../services/client-service.js";
-import { serializeAiSettings, serializeBrandingSettings, serializeClientSettings, serializeInternalSettings, serializeKnowledgeEntry, serializePluginInstallation, serializeWidgetSettings } from "../lib/serializers.js";
+import {
+  archiveKnowledgeDocument,
+  createKnowledgeDocument,
+  listKnowledgeDocumentHistory,
+  listKnowledgeDocuments,
+  reprocessKnowledgeDocument,
+  restoreKnowledgeDocument,
+  rollbackKnowledgeDocument,
+  updateKnowledgeDocument
+} from "../services/knowledge-service.js";
+import {
+  serializeAiSettings,
+  serializeBrandingSettings,
+  serializeClientSettings,
+  serializeInternalSettings,
+  serializeKnowledgeDocument,
+  serializeKnowledgeDocumentVersion,
+  serializeKnowledgeEntry,
+  serializePluginInstallation,
+  serializeWidgetSettings
+} from "../lib/serializers.js";
 
 const clientSettingsSchema = z.object({
   timezone: z.string().min(1),
@@ -45,6 +66,20 @@ const brandingSchema = z.object({
   border_radius: z.number().int().nonnegative(),
   font: z.string().min(1),
   header_style: z.string().min(1),
+  panel_width: z.number().int().min(320).max(640),
+  panel_height: z.number().int().min(360).max(760),
+  font_size: z.number().int().min(12).max(18),
+  header_bg_color: z.string().min(4),
+  widget_bg_color: z.string().min(4),
+  composer_bg_color: z.string().min(4),
+  input_bg_color: z.string().min(4),
+  customer_bubble_bg_color: z.string().min(4),
+  customer_text_color: z.string().min(4),
+  assistant_bubble_bg_color: z.string().min(4),
+  assistant_text_color: z.string().min(4),
+  button_bg_color: z.string().min(4),
+  button_text_color: z.string().min(4),
+  footer_text_color: z.string().min(4),
   version: z.number().int().optional()
 });
 
@@ -92,6 +127,20 @@ const knowledgeUpdateSchema = z.object({
   sort_order: z.number().int(),
   enabled: z.boolean(),
   version: z.number().int()
+});
+
+const knowledgeDocumentCreateSchema = z.object({
+  title: z.string().trim().min(1),
+  content: z.string().trim().min(1),
+  tags: z.array(z.string().trim().min(1)).optional()
+});
+
+const knowledgeDocumentUpdateSchema = knowledgeDocumentCreateSchema.extend({
+  latestVersion: z.number().int().positive()
+});
+
+const knowledgeDocumentRollbackSchema = z.object({
+  version: z.number().int().positive()
 });
 
 export const clientRouter = Router();
@@ -284,6 +333,125 @@ clientRouter.post("/clients/:clientId/knowledge/:entryId/restore", requireClient
     return sendSuccess(res, { restored: true });
   } catch (error) {
     return sendError(res, 404, "KNOWLEDGE_ENTRY_NOT_FOUND", error instanceof Error ? error.message : "Knowledge entry restore failed.");
+  }
+});
+
+clientRouter.get("/clients/:clientId/knowledge-documents", async (req, res) => {
+  const documents = await listKnowledgeDocuments(String(req.params.clientId));
+  return sendSuccess(res, documents.map(serializeKnowledgeDocument));
+});
+
+clientRouter.post("/clients/:clientId/knowledge-documents", requireClientRole(["owner", "admin", "editor"]), async (req, res) => {
+  const parsed = knowledgeDocumentCreateSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return sendError(res, 422, "VALIDATION_ERROR", "Knowledge section payload is invalid.", { issues: parsed.error.flatten() });
+  }
+
+  try {
+    const document = await createKnowledgeDocument(
+      String(req.params.clientId),
+      parsed.data,
+      (res.locals.auth as { sub?: string } | undefined)?.sub ?? "unknown",
+      res.locals.requestId as string
+    );
+    return sendSuccess(res, serializeKnowledgeDocument(document), {}, 201);
+  } catch (error) {
+    return sendError(res, 400, "KNOWLEDGE_DOCUMENT_CREATE_FAILED", error instanceof Error ? error.message : "Knowledge section create failed.");
+  }
+});
+
+clientRouter.put("/clients/:clientId/knowledge-documents/:documentId", requireClientRole(["owner", "admin", "editor"]), async (req, res) => {
+  const parsed = knowledgeDocumentUpdateSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return sendError(res, 422, "VALIDATION_ERROR", "Knowledge section update payload is invalid.", { issues: parsed.error.flatten() });
+  }
+
+  try {
+    const document = await updateKnowledgeDocument(
+      String(req.params.clientId),
+      String(req.params.documentId),
+      parsed.data,
+      (res.locals.auth as { sub?: string } | undefined)?.sub ?? "unknown",
+      res.locals.requestId as string
+    );
+    return sendSuccess(res, serializeKnowledgeDocument(document as never));
+  } catch (error) {
+    const status = error instanceof AppError ? error.statusCode : 400;
+    const code = error instanceof AppError ? error.code : "KNOWLEDGE_DOCUMENT_UPDATE_FAILED";
+    return sendError(res, status, code, error instanceof Error ? error.message : "Knowledge section update failed.");
+  }
+});
+
+clientRouter.delete("/clients/:clientId/knowledge-documents/:documentId", requireClientRole(["owner", "admin", "editor"]), async (req, res) => {
+  try {
+    await archiveKnowledgeDocument(
+      String(req.params.clientId),
+      String(req.params.documentId),
+      (res.locals.auth as { sub?: string } | undefined)?.sub ?? "unknown",
+      res.locals.requestId as string
+    );
+    return sendSuccess(res, { archived: true });
+  } catch (error) {
+    return sendError(res, 404, "KNOWLEDGE_DOCUMENT_NOT_FOUND", error instanceof Error ? error.message : "Knowledge section archive failed.");
+  }
+});
+
+clientRouter.post("/clients/:clientId/knowledge-documents/:documentId/restore", requireClientRole(["owner", "admin"]), async (req, res) => {
+  try {
+    await restoreKnowledgeDocument(
+      String(req.params.clientId),
+      String(req.params.documentId),
+      (res.locals.auth as { sub?: string } | undefined)?.sub ?? "unknown",
+      res.locals.requestId as string
+    );
+    return sendSuccess(res, { restored: true });
+  } catch (error) {
+    const status = error instanceof AppError ? error.statusCode : 404;
+    const code = error instanceof AppError ? error.code : "KNOWLEDGE_DOCUMENT_RESTORE_FAILED";
+    return sendError(res, status, code, error instanceof Error ? error.message : "Knowledge section restore failed.");
+  }
+});
+
+clientRouter.get("/clients/:clientId/knowledge-documents/:documentId/history", async (req, res) => {
+  const history = await listKnowledgeDocumentHistory(String(req.params.clientId), String(req.params.documentId));
+  return sendSuccess(res, history.map(serializeKnowledgeDocumentVersion));
+});
+
+clientRouter.post("/clients/:clientId/knowledge-documents/:documentId/rollback", requireClientRole(["owner", "admin"]), async (req, res) => {
+  const parsed = knowledgeDocumentRollbackSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return sendError(res, 422, "VALIDATION_ERROR", "Knowledge section rollback payload is invalid.", { issues: parsed.error.flatten() });
+  }
+
+  try {
+    await rollbackKnowledgeDocument(
+      String(req.params.clientId),
+      String(req.params.documentId),
+      parsed.data.version,
+      (res.locals.auth as { sub?: string } | undefined)?.sub ?? "unknown",
+      res.locals.requestId as string
+    );
+    return sendSuccess(res, { rolled_back: true });
+  } catch (error) {
+    const status = error instanceof AppError ? error.statusCode : 404;
+    const code = error instanceof AppError ? error.code : "KNOWLEDGE_DOCUMENT_ROLLBACK_FAILED";
+    return sendError(res, status, code, error instanceof Error ? error.message : "Knowledge section rollback failed.");
+  }
+});
+
+clientRouter.post("/clients/:clientId/knowledge-documents/:documentId/reprocess", requireClientRole(["owner", "admin"]), async (req, res) => {
+  try {
+    await reprocessKnowledgeDocument(
+      String(req.params.clientId),
+      String(req.params.documentId),
+      (res.locals.auth as { sub?: string } | undefined)?.sub ?? "unknown",
+      res.locals.requestId as string
+    );
+    return sendSuccess(res, { queued: true });
+  } catch (error) {
+    const status = error instanceof AppError ? error.statusCode : 404;
+    const code = error instanceof AppError ? error.code : "KNOWLEDGE_DOCUMENT_REPROCESS_FAILED";
+    return sendError(res, status, code, error instanceof Error ? error.message : "Knowledge section reprocess failed.");
   }
 });
 

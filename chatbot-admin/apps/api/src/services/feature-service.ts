@@ -3,7 +3,8 @@ import { writeAuditLog } from "../lib/audit.js";
 import { encryptValue } from "../lib/crypto.js";
 import { prisma } from "../lib/prisma.js";
 import { newId } from "../lib/ids.js";
-import { createConfigVersion, createKnowledgeEntry } from "./client-service.js";
+import { createConfigVersion } from "./client-service.js";
+import { createKnowledgeDocument } from "./knowledge-service.js";
 
 type VersionedInput = { version?: number };
 
@@ -759,13 +760,12 @@ export async function convertFaqSuggestionToKnowledge(clientId: string, suggesti
   if (!suggestion) {
     throw new AppError(404, "FAQ_SUGGESTION_NOT_FOUND", "FAQ suggestion was not found.");
   }
-  const entry = await createKnowledgeEntry(
+  const entry = await createKnowledgeDocument(
     clientId,
     {
-      type: "faq",
       title: suggestion.normalizedQuestion,
-      content: { question: suggestion.normalizedQuestion, answer },
-      enabled: true
+      content: `Question: ${suggestion.normalizedQuestion}\n\nAnswer: ${answer}`,
+      tags: ["faq"]
     },
     actorId,
     requestId

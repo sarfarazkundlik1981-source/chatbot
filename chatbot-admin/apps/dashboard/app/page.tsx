@@ -28,8 +28,6 @@ type ClientOption = {
   name: string;
 };
 
-const knowledgeTypes = ["company", "services", "pricing", "faq", "team", "hours", "locations", "contact", "policies"] as const;
-
 type Section =
   | "overview"
   | "settings"
@@ -54,7 +52,7 @@ const sections: Section[] = ["overview", "settings", "knowledge", "features", "d
 const sectionMeta: Record<Section, { label: string; description: string }> = {
   overview: { label: "Overview", description: "Usage, cost, and installation summary for the selected client." },
   settings: { label: "Settings", description: "Branding, widget behavior, AI instructions, and internal keys." },
-  knowledge: { label: "Knowledge", description: "Manage structured business information that grounds the assistant." },
+  knowledge: { label: "Knowledge Center", description: "Manage admin-curated knowledge sections that ground the assistant." },
   features: { label: "Features", description: "Configure runtime product features, lead flows, and protection layers." },
   domains: { label: "Domains", description: "Allowed website domains connected to this client." },
   licenses: { label: "Licenses", description: "Trial and active license states for the current client." },
@@ -228,6 +226,20 @@ export default function HomePage() {
     border_radius: 12,
     font: "Segoe UI",
     header_style: "dark",
+    panel_width: 430,
+    panel_height: 560,
+    font_size: 15,
+    header_bg_color: "#050505",
+    widget_bg_color: "#f6f7f9",
+    composer_bg_color: "#ffffff",
+    input_bg_color: "#f9fafb",
+    customer_bubble_bg_color: "#111827",
+    customer_text_color: "#ffffff",
+    assistant_bubble_bg_color: "#ffffff",
+    assistant_text_color: "#1f2937",
+    button_bg_color: "#8f8f8f",
+    button_text_color: "#ffffff",
+    footer_text_color: "#99a2b2",
     version: 1
   });
   const [widgetForm, setWidgetForm] = useState({
@@ -250,12 +262,13 @@ export default function HomePage() {
     version: 1
   });
   const [knowledgeDraft, setKnowledgeDraft] = useState({
-    type: "faq",
+    id: "",
     title: "",
     content: "",
-    sort_order: 0,
-    enabled: true
+    tags: "",
+    latestVersion: 0
   });
+  const [knowledgeHistory, setKnowledgeHistory] = useState<Record<string, any[]>>({});
   const [featureForms, setFeatureForms] = useState<Record<string, any>>({
     business_hours: { enabled: false, timezone: "UTC", schedule: defaultBusinessSchedule(), notes: "", version: 1 },
     out_of_hours: { enabled: false, greeting: "", limited_ctas: "", form_first_mode: false, visitor_message: "", version: 1 },
@@ -511,7 +524,7 @@ export default function HomePage() {
       const mapping: Record<Section, string> = {
         overview: `/clients/${clientId}/analytics`,
         settings: `/clients/${clientId}/settings`,
-        knowledge: `/clients/${clientId}/knowledge`,
+        knowledge: `/clients/${clientId}/knowledge-documents`,
         features: `/clients/${clientId}/features`,
         domains: `/clients/${clientId}/domains`,
         licenses: `/clients/${clientId}/licenses`,
@@ -579,29 +592,28 @@ export default function HomePage() {
     setError("");
     setNotice("");
     try {
-      await apiFetch(`/clients/${clientId}/knowledge`, session.token, {
-        method: "POST",
+      const isUpdate = Boolean(knowledgeDraft.id);
+      await apiFetch(`/clients/${clientId}/knowledge-documents${isUpdate ? `/${knowledgeDraft.id}` : ""}`, session.token, {
+        method: isUpdate ? "PUT" : "POST",
         body: JSON.stringify({
-          ...knowledgeDraft,
-          type: knowledgeDraft.type,
-          content:
-            knowledgeDraft.type === "faq"
-              ? { question: knowledgeDraft.title, answer: knowledgeDraft.content }
-              : { body: knowledgeDraft.content }
+          title: knowledgeDraft.title,
+          content: knowledgeDraft.content,
+          tags: parseStringList(knowledgeDraft.tags),
+          ...(isUpdate ? { latestVersion: knowledgeDraft.latestVersion } : {})
         })
       });
       setKnowledgeDraft({
-        type: "faq",
+        id: "",
         title: "",
         content: "",
-        sort_order: 0,
-        enabled: true
+        tags: "",
+        latestVersion: 0
       });
       setFormErrors((current) => clearFieldError(current, "knowledge_content"));
-      setNotice("Knowledge entry created.");
+      setNotice(isUpdate ? "Knowledge section saved. Processing queued." : "Knowledge section created. Processing queued.");
       await loadSection("knowledge");
     } catch (nextError) {
-      setError(nextError instanceof Error ? nextError.message : "Knowledge create failed");
+      setError(nextError instanceof Error ? nextError.message : "Knowledge save failed");
     } finally {
       setLoading(false);
     }
@@ -797,6 +809,66 @@ export default function HomePage() {
     setKnowledgeDraft((current) => ({ ...current, [field]: value }));
     if (field === "content") {
       setFormErrors((current) => clearFieldError(current, "knowledge_content"));
+    }
+  }
+
+  function editKnowledgeDocument(row: any) {
+    setKnowledgeDraft({
+      id: row.id,
+      title: row.latest_title ?? "",
+      content: row.latest_content ?? "",
+      tags: formatStringList(row.latest_tags ?? []),
+      latestVersion: row.latest_version ?? 0
+    });
+  }
+
+  async function knowledgeDocumentAction(row: any, action: "archive" | "restore" | "reprocess" | "history" | "rollback") {
+    if (!session || !clientId) {
+      return;
+    }
+
+    setLoading(true);
+    setError("");
+    setNotice("");
+    try {
+      if (action === "history") {
+        const payload = await apiFetch(`/clients/${clientId}/knowledge-documents/${row.id}/history`, session.token);
+        setKnowledgeHistory((current) => ({ ...current, [row.id]: payload.data ?? [] }));
+        setNotice("History loaded.");
+        return;
+      }
+
+      if (action === "rollback") {
+        const version = Number(window.prompt("Rollback to version", String(row.published_version ?? row.latest_version ?? "")));
+        if (!version) {
+          return;
+        }
+        await apiFetch(`/clients/${clientId}/knowledge-documents/${row.id}/rollback`, session.token, { method: "POST", body: JSON.stringify({ version }) });
+        setNotice("Rollback queued for processing.");
+        await loadSection("knowledge");
+        return;
+      }
+
+      if (action === "archive") {
+        await apiFetch(`/clients/${clientId}/knowledge-documents/${row.id}`, session.token, { method: "DELETE" });
+        setNotice("Knowledge section archived.");
+      }
+
+      if (action === "restore") {
+        await apiFetch(`/clients/${clientId}/knowledge-documents/${row.id}/restore`, session.token, { method: "POST", body: JSON.stringify({}) });
+        setNotice("Knowledge section restored. Processing queued.");
+      }
+
+      if (action === "reprocess") {
+        await apiFetch(`/clients/${clientId}/knowledge-documents/${row.id}/reprocess`, session.token, { method: "POST", body: JSON.stringify({}) });
+        setNotice("Reprocess queued.");
+      }
+
+      await loadSection("knowledge");
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : "Knowledge action failed");
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -1023,6 +1095,20 @@ export default function HomePage() {
             <input className="field" type="number" value={brandingForm.border_radius} onChange={(event) => setBrandingForm({ ...brandingForm, border_radius: Number(event.target.value) })} placeholder="Border radius" />
             <input className="field" value={brandingForm.font} onChange={(event) => setBrandingForm({ ...brandingForm, font: event.target.value })} placeholder="Font" />
             <input className="field" value={brandingForm.header_style} onChange={(event) => setBrandingForm({ ...brandingForm, header_style: event.target.value })} placeholder="Header style" />
+            <input className="field" type="number" value={brandingForm.panel_width} onChange={(event) => setBrandingForm({ ...brandingForm, panel_width: Number(event.target.value) })} placeholder="Chat width" />
+            <input className="field" type="number" value={brandingForm.panel_height} onChange={(event) => setBrandingForm({ ...brandingForm, panel_height: Number(event.target.value) })} placeholder="Chat height" />
+            <input className="field" type="number" value={brandingForm.font_size} onChange={(event) => setBrandingForm({ ...brandingForm, font_size: Number(event.target.value) })} placeholder="Chat font size" />
+            <input className="field" value={brandingForm.header_bg_color} onChange={(event) => setBrandingForm({ ...brandingForm, header_bg_color: event.target.value })} placeholder="Header background" />
+            <input className="field" value={brandingForm.widget_bg_color} onChange={(event) => setBrandingForm({ ...brandingForm, widget_bg_color: event.target.value })} placeholder="Chat background" />
+            <input className="field" value={brandingForm.composer_bg_color} onChange={(event) => setBrandingForm({ ...brandingForm, composer_bg_color: event.target.value })} placeholder="Composer background" />
+            <input className="field" value={brandingForm.input_bg_color} onChange={(event) => setBrandingForm({ ...brandingForm, input_bg_color: event.target.value })} placeholder="Input background" />
+            <input className="field" value={brandingForm.customer_bubble_bg_color} onChange={(event) => setBrandingForm({ ...brandingForm, customer_bubble_bg_color: event.target.value })} placeholder="Customer reply background" />
+            <input className="field" value={brandingForm.customer_text_color} onChange={(event) => setBrandingForm({ ...brandingForm, customer_text_color: event.target.value })} placeholder="Customer text color" />
+            <input className="field" value={brandingForm.assistant_bubble_bg_color} onChange={(event) => setBrandingForm({ ...brandingForm, assistant_bubble_bg_color: event.target.value })} placeholder="Chatbot reply background" />
+            <input className="field" value={brandingForm.assistant_text_color} onChange={(event) => setBrandingForm({ ...brandingForm, assistant_text_color: event.target.value })} placeholder="Chatbot text color" />
+            <input className="field" value={brandingForm.button_bg_color} onChange={(event) => setBrandingForm({ ...brandingForm, button_bg_color: event.target.value })} placeholder="Button background" />
+            <input className="field" value={brandingForm.button_text_color} onChange={(event) => setBrandingForm({ ...brandingForm, button_text_color: event.target.value })} placeholder="Button text color" />
+            <input className="field" value={brandingForm.footer_text_color} onChange={(event) => setBrandingForm({ ...brandingForm, footer_text_color: event.target.value })} placeholder="Footer text color" />
           </div>
           <button className="primary" onClick={() => void save(`/clients/${clientId}/branding`, brandingForm)}>
             Save Branding
@@ -1070,51 +1156,97 @@ export default function HomePage() {
   }
 
   function renderKnowledge() {
-    const entries = data.knowledge?.data ?? [];
+    const documents = data.knowledge?.data ?? [];
+    const editing = Boolean(knowledgeDraft.id);
+    const editingRow = documents.find((row: any) => row.id === knowledgeDraft.id);
+    const processing = editingRow && ["QUEUED", "RUNNING"].includes(editingRow.processing_state);
 
     return (
       <div className="grid">
         <div className="panel">
-          <h2>Create Knowledge Entry</h2>
+          <h2>{editing ? "Edit Knowledge Section" : "Add Knowledge Section"}</h2>
           <div className="form-grid">
-            <select className="field" value={knowledgeDraft.type} onChange={(event) => updateKnowledgeDraft("type", event.target.value)}>
-              {knowledgeTypes.map((type) => (
-                <option key={type} value={type}>
-                  {type}
-                </option>
-              ))}
-            </select>
             <input className="field" value={knowledgeDraft.title} onChange={(event) => updateKnowledgeDraft("title", event.target.value)} placeholder="Title" />
-            <input className="field" type="number" value={knowledgeDraft.sort_order} onChange={(event) => updateKnowledgeDraft("sort_order", Number(event.target.value))} placeholder="Sort order" />
-            <label className="checkbox"><input type="checkbox" checked={knowledgeDraft.enabled} onChange={(event) => updateKnowledgeDraft("enabled", event.target.checked)} />Enabled</label>
-            <textarea className="field full-width" rows={6} value={knowledgeDraft.content} onChange={(event) => updateKnowledgeDraft("content", event.target.value)} placeholder={knowledgeDraft.type === "faq" ? "Answer" : "Content"} />
+            <textarea className="field full-width" rows={10} value={knowledgeDraft.content} onChange={(event) => updateKnowledgeDraft("content", event.target.value)} placeholder="Write the business information this assistant should know." />
             {renderFieldError("knowledge_content")}
+            <details className="full-width">
+              <summary>Advanced</summary>
+              <textarea className="field full-width" rows={3} value={knowledgeDraft.tags} onChange={(event) => updateKnowledgeDraft("tags", event.target.value)} placeholder="Optional tags, one per line" />
+            </details>
           </div>
-          <button className="primary" onClick={() => void createKnowledge()}>
-            Create Entry
+          {processing ? <p className="muted">This section is processing. Save is disabled until processing finishes.</p> : null}
+          <button className="primary" disabled={Boolean(processing)} onClick={() => void createKnowledge()}>
+            {editing ? "Save Section" : "Create Section"}
           </button>
+          {editing ? (
+            <button className="secondary" onClick={() => setKnowledgeDraft({ id: "", title: "", content: "", tags: "", latestVersion: 0 })}>
+              Cancel Edit
+            </button>
+          ) : null}
         </div>
         <div className="panel">
-          <h2>Knowledge Entries</h2>
+          <h2>Knowledge Center</h2>
           <div className="table-wrap">
             <table className="table">
               <thead>
                 <tr>
-                  <th>Type</th>
                   <th>Title</th>
-                  <th>Enabled</th>
-                  <th>Version</th>
+                  <th>State</th>
+                  <th>Processing</th>
+                  <th>Latest</th>
+                  <th>Published</th>
+                  <th>Updated</th>
+                  <th>Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {entries.map((entry: any) => (
-                  <tr key={entry.id}>
-                    <td>{entry.type}</td>
-                    <td>{entry.title}</td>
-                    <td>{String(entry.enabled)}</td>
-                    <td>{entry.version}</td>
-                  </tr>
-                ))}
+                {documents.map((row: any) => {
+                  const rowProcessing = ["QUEUED", "RUNNING"].includes(row.processing_state);
+                  return (
+                    <tr key={row.id}>
+                      <td>{row.latest_title}</td>
+                      <td>{row.document_state}</td>
+                      <td>{row.processing_state}</td>
+                      <td>v{row.latest_version}</td>
+                      <td>{row.published_version ? `v${row.published_version}` : "-"}</td>
+                      <td>{row.updated_at}</td>
+                      <td>
+                        <div className="table-actions">
+                          <button className="secondary compact-button" disabled={rowProcessing} onClick={() => editKnowledgeDocument(row)}>
+                            Edit
+                          </button>
+                          <button className="secondary compact-button" onClick={() => void knowledgeDocumentAction(row, "history")}>
+                            History
+                          </button>
+                          <button className="secondary compact-button" disabled={rowProcessing} onClick={() => void knowledgeDocumentAction(row, "rollback")}>
+                            Rollback
+                          </button>
+                          <button className="secondary compact-button" disabled={rowProcessing} onClick={() => void knowledgeDocumentAction(row, "reprocess")}>
+                            Reprocess
+                          </button>
+                          {row.document_state === "ARCHIVED" ? (
+                            <button className="secondary compact-button" disabled={rowProcessing} onClick={() => void knowledgeDocumentAction(row, "restore")}>
+                              Restore
+                            </button>
+                          ) : (
+                            <button className="secondary compact-button" onClick={() => void knowledgeDocumentAction(row, "archive")}>
+                              Archive
+                            </button>
+                          )}
+                        </div>
+                        {knowledgeHistory[row.id]?.length ? (
+                          <div className="history-list">
+                            {knowledgeHistory[row.id].map((version: any) => (
+                              <div key={version.id}>
+                                v{version.version} - {version.created_at} - {version.title}
+                              </div>
+                            ))}
+                          </div>
+                        ) : null}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

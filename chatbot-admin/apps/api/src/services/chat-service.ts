@@ -1,9 +1,12 @@
 import { prisma } from "../lib/prisma.js";
-import { decryptValue } from "../lib/crypto.js";
+import { decryptValue, hashValue } from "../lib/crypto.js";
 import { AppError } from "../lib/errors.js";
 import { eventBus } from "../domain/event-bus.js";
 import { newId } from "../lib/ids.js";
 import { incrementFaqSuggestion } from "./feature-service.js";
+import { buildPrompt } from "./prompt-pipeline.js";
+import { retrieveKnowledge } from "./retriever-service.js";
+import { getLatestConfigVersion } from "./client-service.js";
 
 type ChatReply = {
   message: string;
@@ -81,15 +84,14 @@ function extractEmergencyKeywords(input: unknown): string[] {
   return [];
 }
 
-export async function fetchOpenRouterReply(clientId: string, content: string): Promise<{ content: string; tokens: number }> {
-  const [internalSettings, aiSettings, knowledgeEntries, businessHours, outOfHours, priceListItems, callbackConfig, appointmentConfig, serviceAreaConfig, leadQualification, emergencyDetection] =
+type ModelReply = { content: string; tokens: number; trace?: { configurationVersion?: number; knowledgeVersion?: string; aiSettingsVersion?: number; businessConfigVersion?: string } };
+
+export async function fetchOpenRouterReply(clientId: string, content: string): Promise<ModelReply> {
+  const [client, internalSettings, aiSettings, businessHours, outOfHours, priceListItems, callbackConfig, appointmentConfig, serviceAreaConfig, leadQualification, emergencyDetection, retrievedKnowledge, configurationVersion] =
     await Promise.all([
+      prisma.client.findUnique({ where: { id: clientId } }),
       prisma.internalSettings.findUnique({ where: { clientId } }),
       prisma.aiSettings.findUnique({ where: { clientId } }),
-      prisma.knowledgeEntry.findMany({
-        where: { clientId, deletedAt: null, enabled: true },
-        orderBy: { sortOrder: "asc" }
-      }),
       prisma.businessHoursConfig.findUnique({ where: { clientId } }),
       prisma.outOfHoursConfig.findUnique({ where: { clientId } }),
       prisma.priceListItem.findMany({ where: { clientId, deletedAt: null, enabled: true }, orderBy: [{ sortOrder: "asc" }, { name: "asc" }] }),
@@ -97,7 +99,9 @@ export async function fetchOpenRouterReply(clientId: string, content: string): P
       prisma.appointmentRequestConfig.findUnique({ where: { clientId } }),
       prisma.serviceAreaConfig.findUnique({ where: { clientId } }),
       prisma.leadQualificationConfig.findUnique({ where: { clientId } }),
-      prisma.emergencyDetectionConfig.findUnique({ where: { clientId } })
+      prisma.emergencyDetectionConfig.findUnique({ where: { clientId } }),
+      retrieveKnowledge(clientId, content),
+      getLatestConfigVersion(clientId)
     ]);
 
   if (!internalSettings?.openRouterApiKey || !aiSettings?.primaryModel) {
@@ -117,9 +121,6 @@ export async function fetchOpenRouterReply(clientId: string, content: string): P
     };
   }
 
-  const knowledgeBlock = knowledgeEntries
-    .map((entry: { type: string; title: string; content: unknown }) => `${entry.type.toUpperCase()}: ${entry.title}\n${JSON.stringify(entry.content)}`)
-    .join("\n\n");
   const pricingBlock = priceListItems
     .map((item) => `${item.category}: ${item.name}${item.price !== null && item.price !== undefined ? ` - ${item.price} ${item.currency ?? ""}` : ""}${item.description ? ` (${item.description})` : ""}`)
     .join("\n");
@@ -137,21 +138,31 @@ export async function fetchOpenRouterReply(clientId: string, content: string): P
     .join("\n");
 
   const apiKey = decryptValue(internalSettings.openRouterApiKey);
-  const systemPrompt =
-    (aiSettings.systemInstructions ?? "You are a professional inquiry assistant.") +
-    `\n\nBusiness knowledge:\n${knowledgeBlock}\n\nRuntime context:\n${runtimeContext}\n\nNever invent pricing, services, guarantees, or availability. Respect feature availability. Keep responses concise. Ask only one follow-up question at a time.`;
+  const systemPrompt = buildPrompt({
+    systemInstructions: aiSettings.systemInstructions,
+    businessContext: client?.name ? `Business name: ${client.name}` : "",
+    runtimeContext,
+    retrievedKnowledge,
+    userMessage: content
+  });
+  const trace = {
+    configurationVersion,
+    knowledgeVersion: hashValue(retrievedKnowledge.map((chunk) => `${chunk.document_id}:${chunk.document_version}:${chunk.content}`).join("|")).slice(0, 16),
+    aiSettingsVersion: aiSettings.version,
+    businessConfigVersion: String(configurationVersion)
+  };
 
   try {
-    return await fetchModelReply(apiKey, aiSettings.primaryModel, systemPrompt, [{ role: "user", content }]);
+    return { ...(await fetchModelReply(apiKey, aiSettings.primaryModel, systemPrompt, [{ role: "user", content }])), trace };
   } catch {
     if (internalSettings.fallbackModel) {
       try {
-        return await fetchModelReply(apiKey, internalSettings.fallbackModel, systemPrompt, [{ role: "user", content }]);
+        return { ...(await fetchModelReply(apiKey, internalSettings.fallbackModel, systemPrompt, [{ role: "user", content }])), trace };
       } catch {
-        return { content: fallbackUnavailableMessage, tokens: 0 };
+        return { content: fallbackUnavailableMessage, tokens: 0, trace };
       }
     }
-    return { content: fallbackUnavailableMessage, tokens: 0 };
+    return { content: fallbackUnavailableMessage, tokens: 0, trace };
   }
 }
 
@@ -226,7 +237,11 @@ export async function sendChatMessage(clientId: string, conversationId: string, 
       id: newId(),
       conversationId,
       role: "assistant",
-      body: reply.content
+      body: reply.content,
+      configurationVersion: reply.trace?.configurationVersion,
+      knowledgeVersion: reply.trace?.knowledgeVersion,
+      aiSettingsVersion: reply.trace?.aiSettingsVersion,
+      businessConfigVersion: reply.trace?.businessConfigVersion
     }
   });
 
@@ -245,7 +260,8 @@ export async function sendChatMessage(clientId: string, conversationId: string, 
         conversation_id: conversationId,
         token_usage: reply.tokens,
         estimated_cost: Number((reply.tokens * 0.000002).toFixed(6)),
-        out_of_hours: !openNow
+        out_of_hours: !openNow,
+        trace: reply.trace ?? {}
       }
     }
   });

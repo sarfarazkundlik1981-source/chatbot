@@ -1,5 +1,5 @@
 import { prisma } from "../lib/prisma.js";
-import { createKnowledgeEntry } from "./client-service.js";
+import { createKnowledgeDocument } from "./knowledge-service.js";
 import { writeAuditLog } from "../lib/audit.js";
 
 const TOKEN_COST_PER_MESSAGE = 0.0002;
@@ -142,13 +142,12 @@ export async function resolveUnansweredQuestion(input: {
     return { ignored: true };
   }
 
-  const entry = await createKnowledgeEntry(
+  const entry = await createKnowledgeDocument(
     input.clientId,
     {
-      type: "faq",
       title: input.title ?? question.normalizedQuestion,
-      content: { question: question.normalizedQuestion, answer: input.answer },
-      enabled: true
+      content: `Question: ${question.normalizedQuestion}\n\nAnswer: ${input.answer}`,
+      tags: ["faq"]
     },
     input.actorId,
     input.requestId

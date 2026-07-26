@@ -24,6 +24,20 @@ type BrandingInput = {
   border_radius: number;
   font: string;
   header_style: string;
+  panel_width: number;
+  panel_height: number;
+  font_size: number;
+  header_bg_color: string;
+  widget_bg_color: string;
+  composer_bg_color: string;
+  input_bg_color: string;
+  customer_bubble_bg_color: string;
+  customer_text_color: string;
+  assistant_bubble_bg_color: string;
+  assistant_text_color: string;
+  button_bg_color: string;
+  button_text_color: string;
+  footer_text_color: string;
   version?: number;
 };
 
@@ -59,6 +73,7 @@ export async function createConfigVersion(clientId: string, tx: Prisma.Transacti
     featureFlags,
     entitlements,
     knowledgeEntries,
+    knowledgeDocuments,
     ctas,
     businessHours,
     outOfHours,
@@ -81,6 +96,7 @@ export async function createConfigVersion(clientId: string, tx: Prisma.Transacti
     tx.featureFlag.findMany({ where: { clientId } }),
     tx.clientEntitlement.findMany({ where: { clientId } }),
     tx.knowledgeEntry.findMany({ where: { clientId, deletedAt: null }, orderBy: { sortOrder: "asc" } }),
+    tx.knowledgeDocument.findMany({ where: { clientId, deletedAt: null }, orderBy: { updatedAt: "desc" } }),
     tx.ctaConfig.findMany({ where: { clientId }, orderBy: { createdAt: "asc" } }),
     tx.businessHoursConfig.findUnique({ where: { clientId } }),
     tx.outOfHoursConfig.findUnique({ where: { clientId } }),
@@ -115,6 +131,7 @@ export async function createConfigVersion(clientId: string, tx: Prisma.Transacti
         featureFlags,
         entitlements,
         knowledgeEntries,
+        knowledgeDocuments,
         ctas,
         businessHours,
         outOfHours,
@@ -222,6 +239,20 @@ export async function upsertBranding(clientId: string, input: BrandingInput, act
       borderRadius: input.border_radius,
       font: input.font,
       headerStyle: input.header_style,
+      panelWidth: input.panel_width,
+      panelHeight: input.panel_height,
+      fontSize: input.font_size,
+      headerBgColor: input.header_bg_color,
+      widgetBgColor: input.widget_bg_color,
+      composerBgColor: input.composer_bg_color,
+      inputBgColor: input.input_bg_color,
+      customerBubbleBgColor: input.customer_bubble_bg_color,
+      customerTextColor: input.customer_text_color,
+      assistantBubbleBgColor: input.assistant_bubble_bg_color,
+      assistantTextColor: input.assistant_text_color,
+      buttonBgColor: input.button_bg_color,
+      buttonTextColor: input.button_text_color,
+      footerTextColor: input.footer_text_color,
       version: { increment: 1 }
     },
     create: {
@@ -234,7 +265,21 @@ export async function upsertBranding(clientId: string, input: BrandingInput, act
       secondaryColor: input.secondary_color,
       borderRadius: input.border_radius,
       font: input.font,
-      headerStyle: input.header_style
+      headerStyle: input.header_style,
+      panelWidth: input.panel_width,
+      panelHeight: input.panel_height,
+      fontSize: input.font_size,
+      headerBgColor: input.header_bg_color,
+      widgetBgColor: input.widget_bg_color,
+      composerBgColor: input.composer_bg_color,
+      inputBgColor: input.input_bg_color,
+      customerBubbleBgColor: input.customer_bubble_bg_color,
+      customerTextColor: input.customer_text_color,
+      assistantBubbleBgColor: input.assistant_bubble_bg_color,
+      assistantTextColor: input.assistant_text_color,
+      buttonBgColor: input.button_bg_color,
+      buttonTextColor: input.button_text_color,
+      footerTextColor: input.footer_text_color
     }
   });
 

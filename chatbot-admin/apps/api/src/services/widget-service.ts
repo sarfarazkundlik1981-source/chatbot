@@ -50,7 +50,21 @@ export async function getWidgetConfig(clientId: string) {
       secondary_color: branding?.secondaryColor ?? "#8B5CF6",
       border_radius: branding?.borderRadius ?? 12,
       font: branding?.font ?? "Inter",
-      header_style: branding?.headerStyle ?? "dark"
+      header_style: branding?.headerStyle ?? "dark",
+      panel_width: branding?.panelWidth ?? 430,
+      panel_height: branding?.panelHeight ?? 560,
+      font_size: branding?.fontSize ?? 15,
+      header_bg_color: branding?.headerBgColor ?? "#050505",
+      widget_bg_color: branding?.widgetBgColor ?? "#f6f7f9",
+      composer_bg_color: branding?.composerBgColor ?? "#ffffff",
+      input_bg_color: branding?.inputBgColor ?? "#f9fafb",
+      customer_bubble_bg_color: branding?.customerBubbleBgColor ?? "#111827",
+      customer_text_color: branding?.customerTextColor ?? "#ffffff",
+      assistant_bubble_bg_color: branding?.assistantBubbleBgColor ?? "#ffffff",
+      assistant_text_color: branding?.assistantTextColor ?? "#1f2937",
+      button_bg_color: branding?.buttonBgColor ?? "#8f8f8f",
+      button_text_color: branding?.buttonTextColor ?? "#ffffff",
+      footer_text_color: branding?.footerTextColor ?? "#99a2b2"
     },
     widget: {
       position: widgetSettings?.position ?? "bottom-right",

@@ -97,31 +97,31 @@
     return element;
   }
 
-  const launcher = createBox("button", "position:fixed;right:24px;bottom:24px;min-width:76px;height:44px;padding:0 18px;border:none;border-radius:999px;background:#050505;color:#fff;cursor:pointer;z-index:9999;font:600 14px/1 'Segoe UI',sans-serif;box-shadow:0 14px 34px rgba(0,0,0,.22)");
+  const launcher = createBox("button", "position:fixed;right:24px;bottom:24px;min-width:76px;height:44px;padding:0 18px;border:none;border-radius:999px;background:#050505;color:#fff;cursor:pointer;z-index:9999;font:600 14px/1 'Segoe UI',Arial,sans-serif;box-shadow:0 14px 34px rgba(0,0,0,.22)");
   launcher.type = "button";
   launcher.textContent = "Chat";
 
   const backdrop = createBox("div", "position:fixed;inset:0;background:rgba(2,6,23,.62);display:none;z-index:9998");
-  const panel = createBox("div", "position:fixed;right:24px;bottom:24px;width:474px;max-width:calc(100vw - 32px);height:min(650px, calc(100vh - 48px));background:#f6f7f9;color:#111827;border:1px solid #d8dde8;border-radius:18px;display:none;flex-direction:column;overflow:hidden;z-index:9999;box-shadow:0 20px 48px rgba(15,23,42,.18)");
-  const header = createBox("div", "display:flex;align-items:center;justify-content:space-between;padding:10px 18px;background:#050505;color:#fff;min-height:52px");
+  const panel = createBox("div", "position:fixed;right:24px;bottom:24px;width:430px;max-width:calc(100vw - 40px);height:min(560px, calc(100vh - 96px));background:#f6f7f9;color:#111827;border:1px solid #d8dde8;border-radius:18px;display:none;flex-direction:column;overflow:hidden;z-index:9999;box-shadow:0 20px 48px rgba(15,23,42,.18)");
+  const header = createBox("div", "display:flex;align-items:center;justify-content:space-between;padding:9px 16px;background:#050505;color:#fff;min-height:50px");
   const headerIdentity = createBox("div", "display:flex;align-items:center;gap:12px;min-width:0");
   const headerIcon = createBox("div", "width:34px;height:34px;background:#171717;border:none;border-radius:999px;display:flex;align-items:center;justify-content:center;font-size:15px;flex:0 0 auto");
   const headerText = createBox("div", "display:flex;flex-direction:column;min-width:0");
-  const headerTitle = createBox("div", "font:700 16px/1.15 'Segoe UI',sans-serif;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#fff");
-  const headerSubtitle = createBox("div", "font:400 13px/1.2 'Segoe UI',sans-serif;color:rgba(255,255,255,.76);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px");
+  const headerTitle = createBox("div", "font:700 15px/1.15 'Segoe UI',Arial,sans-serif;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#fff;max-width:280px");
+  const headerSubtitle = createBox("div", "font:400 12px/1.2 'Segoe UI',Arial,sans-serif;color:rgba(255,255,255,.76);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px;max-width:280px");
   const headerControls = createBox("div", "display:flex;align-items:center;gap:14px;flex:0 0 auto");
-  const minimizeButton = createBox("button", "width:24px;height:24px;border:none;background:transparent;color:#fff;border-radius:999px;cursor:pointer;font:400 18px/1 'Segoe UI',sans-serif;opacity:.9");
-  const closeButton = createBox("button", "width:24px;height:24px;border:none;background:transparent;color:#fff;border-radius:999px;cursor:pointer;font:400 22px/1 'Segoe UI',sans-serif;opacity:.9");
-  const messages = createBox("div", "flex:1;overflow:auto;padding:20px 20px 12px;background:#f6f7f9;display:flex;flex-direction:column;gap:12px;font:400 16px/1.55 'Segoe UI',sans-serif");
+  const minimizeButton = createBox("button", "width:24px;height:24px;border:none;background:transparent;color:#fff;border-radius:999px;cursor:pointer;font:400 18px/1 'Segoe UI',Arial,sans-serif;opacity:.9");
+  const closeButton = createBox("button", "width:24px;height:24px;border:none;background:transparent;color:#fff;border-radius:999px;cursor:pointer;font:400 22px/1 'Segoe UI',Arial,sans-serif;opacity:.9");
+  const messages = createBox("div", "flex:1;overflow:auto;padding:18px 18px 12px;background:#f6f7f9;display:flex;flex-direction:column;gap:12px;font:400 15px/1.5 'Segoe UI',Arial,sans-serif");
   const actions = createBox("div", "display:none;gap:8px;flex-wrap:wrap;padding:0 20px 10px;background:#f6f7f9");
   const tools = createBox("div", "display:none;gap:8px;padding:0 20px 10px;background:#f6f7f9;flex-wrap:wrap");
   const formHost = createBox("div", "display:none;padding:12px 20px;background:#f6f7f9;border-top:1px solid #edf0f4");
   const captchaHost = createBox("div", "display:none");
   const composerWrap = createBox("div", "padding:16px 14px 8px;background:#fff;border-top:1px solid #edf0f4");
   const composer = createBox("form", "display:flex;align-items:center;gap:8px;padding:6px 8px 6px 14px;border:1px solid #d8dde8;border-radius:14px;background:#f9fafb");
-  const input = createBox("input", "flex:1;min-width:0;padding:8px 0;border:none;background:transparent;color:#111827;font:400 16px/1.35 'Segoe UI',sans-serif;outline:none");
+  const input = createBox("input", "flex:1;min-width:0;padding:8px 0;border:none;background:transparent;color:#111827;font:400 15px/1.35 'Segoe UI',Arial,sans-serif;outline:none");
   const send = createBox("button", "width:32px;height:32px;border:none;border-radius:10px;background:#8f8f8f;color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:15px;flex:0 0 auto");
-  const footer = createBox("div", "padding:0 10px 10px;background:#fff;color:#99a2b2;text-align:center;font:500 13px/1.2 'Segoe UI',sans-serif");
+  const footer = createBox("div", "padding:0 10px 10px;background:#fff;color:#99a2b2;text-align:center;font:500 12px/1.2 'Segoe UI',Arial,sans-serif");
 
   input.type = "text";
   input.placeholder = "Type a message...";
@@ -159,16 +159,21 @@
   panel.appendChild(footer);
 
   function addMessage(role, text) {
+    const baseFontSize = appearanceNumber("font_size", 15, 12, 18);
+    const customerBubbleBg = appearanceColor("customer_bubble_bg_color", "#111827");
+    const customerText = appearanceColor("customer_text_color", "#ffffff");
+    const assistantBubbleBg = appearanceColor("assistant_bubble_bg_color", "#ffffff");
+    const assistantText = appearanceColor("assistant_text_color", "#1f2937");
     const bubble = createBox(
       "div",
       [
         "max-width:78%",
         "padding:14px 18px",
         "border-radius:16px",
-        "font:400 16px/1.55 'Segoe UI',sans-serif",
+        `font:400 ${baseFontSize}px/1.5 'Segoe UI',Arial,sans-serif`,
         role === "user"
-          ? "background:#111827;color:#fff;align-self:flex-end;border-bottom-right-radius:8px;white-space:pre-wrap"
-          : "background:#fff;color:#1f2937;align-self:flex-start;white-space:pre-wrap;border:1px solid #dfe4ec;box-shadow:0 2px 8px rgba(15,23,42,.06);border-bottom-left-radius:8px"
+          ? `background:${customerBubbleBg};color:${customerText};align-self:flex-end;border-bottom-right-radius:8px;white-space:pre-wrap`
+          : `background:${assistantBubbleBg};color:${assistantText};align-self:flex-start;white-space:pre-wrap;border:1px solid #dfe4ec;box-shadow:0 2px 8px rgba(15,23,42,.06);border-bottom-left-radius:8px`
       ].join(";")
     );
     bubble.textContent = text;
@@ -182,7 +187,8 @@
     input.style.opacity = disabled ? "0.6" : "1";
     send.style.opacity = disabled ? "0.6" : "1";
     send.style.cursor = disabled ? "not-allowed" : "pointer";
-    send.style.background = disabled ? "#b0b0b0" : "#8f8f8f";
+    send.style.background = disabled ? "#b0b0b0" : appearanceColor("button_bg_color", "#8f8f8f");
+    send.style.color = appearanceColor("button_text_color", "#ffffff");
   }
 
   function setUnavailableState(message) {
@@ -227,7 +233,7 @@
     }
     container.style.display = "flex";
     buttons.forEach(function (buttonConfig) {
-      const button = createBox("button", "padding:8px 11px;border:1px solid #d8deea;border-radius:10px;background:#fff;color:#1f2937;cursor:pointer;font:600 13px/1.2 'Segoe UI',sans-serif");
+      const button = createBox("button", "max-width:100%;padding:8px 11px;border:1px solid #d8deea;border-radius:10px;background:#fff;color:#1f2937;cursor:pointer;font:600 13px/1.2 'Segoe UI',Arial,sans-serif;white-space:normal;text-align:left");
       button.type = "button";
       button.textContent = buttonConfig.label;
       button.addEventListener("click", buttonConfig.onClick);
@@ -410,7 +416,7 @@
       inputs[field.key] = element;
       form.appendChild(element);
     });
-    const submit = createBox("button", "padding:10px 14px;border:none;border-radius:12px;background:#6d28d9;color:#fff;cursor:pointer;font:600 13px/1.2 'Segoe UI',sans-serif");
+    const submit = createBox("button", `padding:10px 14px;border:none;border-radius:12px;background:${appearanceColor("button_bg_color", "#050505")};color:${appearanceColor("button_text_color", "#ffffff")};cursor:pointer;font:600 13px/1.2 'Segoe UI',Arial,sans-serif`);
     submit.type = "submit";
     submit.textContent = "Submit";
     form.appendChild(submit);
@@ -606,21 +612,72 @@
     renderButtons(tools, buttons);
   }
 
+  function cleanDisplayName(value) {
+    const name = String(value || "").trim();
+    if (!name) {
+      return "";
+    }
+    if (/hostinger|hosting|localhost|\.test|\.local|\.com|\.net|\.org|\.co\.|^[a-z]+-[a-z]+-\d+/i.test(name)) {
+      return "";
+    }
+    return name.length > 34 ? name.slice(0, 31).trim() + "..." : name;
+  }
+
+  function appearanceNumber(key, fallback, min, max) {
+    const value = Number(state.config && state.config.branding ? state.config.branding[key] : null);
+    if (!Number.isFinite(value)) {
+      return fallback;
+    }
+    return Math.min(max, Math.max(min, value));
+  }
+
+  function appearanceColor(key, fallback) {
+    const value = state.config && state.config.branding ? String(state.config.branding[key] || "").trim() : "";
+    return value || fallback;
+  }
+
   function applyConfig() {
     if (!state.config) {
       return;
     }
 
-    const businessName = (state.config.business && state.config.business.name ? state.config.business.name : "").trim();
-    const title = businessName || (window.WCP_CONFIG.siteName || "").trim() || "Assistant";
-    const subtitle = (window.WCP_CONFIG.siteTagline || "").trim() || ((state.config.widget && state.config.widget.greeting) ? state.config.widget.greeting : "");
+    const businessName = cleanDisplayName(state.config.business && state.config.business.name ? state.config.business.name : "");
+    const siteName = cleanDisplayName(window.WCP_CONFIG.siteName || "");
+    const title = businessName || siteName || "SFM";
+    const subtitle = cleanDisplayName(window.WCP_CONFIG.siteTagline || "") || "Swift Facilities Management";
     headerTitle.textContent = /assistant/i.test(title) ? title : title + " Assistant";
     headerSubtitle.textContent = subtitle;
     launcher.textContent = "Chat";
-    launcher.style.background = "#050505";
-    send.style.background = "#8f8f8f";
-    panel.style.borderRadius = state.embedded ? ((state.config.branding.border_radius || 18) + "px") : "18px";
+    const panelWidth = appearanceNumber("panel_width", 430, 320, 640);
+    const panelHeight = appearanceNumber("panel_height", 560, 360, 760);
+    const baseFontSize = appearanceNumber("font_size", 15, 12, 18);
+    const radius = appearanceNumber("border_radius", 18, 0, 32);
+    const headerBg = appearanceColor("header_bg_color", "#050505");
+    const widgetBg = appearanceColor("widget_bg_color", "#f6f7f9");
+    const composerBg = appearanceColor("composer_bg_color", "#ffffff");
+    const inputBg = appearanceColor("input_bg_color", "#f9fafb");
+    const buttonBg = appearanceColor("button_bg_color", "#8f8f8f");
+    const buttonText = appearanceColor("button_text_color", "#ffffff");
+    const footerText = appearanceColor("footer_text_color", "#99a2b2");
+    launcher.style.background = headerBg;
+    panel.style.width = `${panelWidth}px`;
+    panel.style.maxWidth = "calc(100vw - 40px)";
+    panel.style.height = `min(${panelHeight}px, calc(100vh - 96px))`;
+    panel.style.background = widgetBg;
+    panel.style.borderRadius = state.embedded ? `${radius}px` : `${radius}px`;
     panel.style.fontFamily = state.config.branding.font || "Segoe UI";
+    header.style.background = headerBg;
+    messages.style.background = widgetBg;
+    messages.style.fontSize = `${baseFontSize}px`;
+    actions.style.background = widgetBg;
+    tools.style.background = widgetBg;
+    formHost.style.background = widgetBg;
+    composerWrap.style.background = composerBg;
+    composer.style.background = inputBg;
+    input.style.fontSize = `${baseFontSize}px`;
+    send.style.background = buttonBg;
+    send.style.color = buttonText;
+    footer.style.color = footerText;
     headerSubtitle.style.display = subtitle ? "block" : "none";
     footer.textContent = "Powered by " + title;
     if (state.config.widget.position === "bottom-left") {
@@ -924,7 +981,7 @@
       panel.style.right = "auto";
       panel.style.bottom = "auto";
       panel.style.transform = "translate(-50%, -50%)";
-      panel.style.maxWidth = "min(474px, calc(100vw - 32px))";
+      panel.style.maxWidth = "min(430px, calc(100vw - 40px))";
       panel.style.width = "100%";
       panel.style.borderRadius = "18px";
     }
@@ -941,9 +998,9 @@
     }
 
     if (window.innerWidth < 640) {
-      panel.style.width = "calc(100vw - 24px)";
-      panel.style.maxWidth = "474px";
-      panel.style.height = "min(620px, calc(100vh - 56px))";
+      panel.style.width = "calc(100vw - 28px)";
+      panel.style.maxWidth = "430px";
+      panel.style.height = "min(540px, calc(100vh - 112px))";
       if (state.isPopupMode) {
         panel.style.left = "50%";
         panel.style.right = "auto";

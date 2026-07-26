@@ -27,6 +27,32 @@ enum KnowledgeEntryType {
   policies
 }
 
+enum KnowledgeDocumentState {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum KnowledgeProcessingState {
+  IDLE
+  QUEUED
+  RUNNING
+  FAILED
+}
+
+enum KnowledgeProcessingJobStatus {
+  QUEUED
+  RUNNING
+  SUCCEEDED
+  FAILED
+}
+
+enum KnowledgeProcessingStage {
+  CLEANING
+  CHUNKING
+  INDEXING
+}
+
 enum LogType {
   API
   ERROR
@@ -65,6 +91,10 @@ model Client {
   allowedDomains      AllowedDomain[]
   apiCredentials      ApiCredential[]
   knowledgeEntries    KnowledgeEntry[]
+  knowledgeDocuments  KnowledgeDocument[]
+  knowledgeDocumentVersions KnowledgeDocumentVersion[]
+  knowledgeChunks     KnowledgeChunk[]
+  knowledgeProcessingJobs KnowledgeProcessingJob[]
   pluginInstallations PluginInstallation[]
   conversations       Conversation[]
   leads               Lead[]
@@ -223,6 +253,20 @@ model BrandingSettings {
   borderRadius   Int
   font           String
   headerStyle    String
+  panelWidth     Int      @default(430)
+  panelHeight    Int      @default(560)
+  fontSize       Int      @default(15)
+  headerBgColor  String   @default("#050505")
+  widgetBgColor  String   @default("#f6f7f9")
+  composerBgColor String  @default("#ffffff")
+  inputBgColor   String   @default("#f9fafb")
+  customerBubbleBgColor String @default("#111827")
+  customerTextColor String @default("#ffffff")
+  assistantBubbleBgColor String @default("#ffffff")
+  assistantTextColor String @default("#1f2937")
+  buttonBgColor  String   @default("#8f8f8f")
+  buttonTextColor String  @default("#ffffff")
+  footerTextColor String  @default("#99a2b2")
   version        Int      @default(1)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
@@ -330,6 +374,84 @@ model KnowledgeEntry {
   client    Client             @relation(fields: [clientId], references: [id], onDelete: Restrict)
 }
 
+model KnowledgeDocument {
+  id                String                   @id @default(dbgenerated("app_uuid_v7()"))
+  clientId          String
+  documentKey       String
+  documentState     KnowledgeDocumentState   @default(DRAFT)
+  processingState   KnowledgeProcessingState @default(IDLE)
+  latestVersion     Int                      @default(1)
+  processingVersion Int?
+  publishedVersion  Int?
+  createdBy         String?
+  updatedBy         String?
+  deletedAt         DateTime?
+  deletedBy         String?
+  createdAt         DateTime                 @default(now())
+  updatedAt         DateTime                 @updatedAt
+  client            Client                   @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  versions          KnowledgeDocumentVersion[]
+  chunks            KnowledgeChunk[]
+  processingJobs    KnowledgeProcessingJob[]
+
+  @@unique([clientId, documentKey])
+  @@index([clientId, documentState])
+  @@index([clientId, processingState])
+}
+
+model KnowledgeDocumentVersion {
+  id         String            @id @default(dbgenerated("app_uuid_v7()"))
+  documentId String
+  clientId   String
+  version    Int
+  title      String
+  content    String
+  tags       Json?
+  createdBy  String?
+  createdAt  DateTime          @default(now())
+  client     Client            @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  document   KnowledgeDocument @relation(fields: [documentId], references: [id], onDelete: Restrict)
+
+  @@unique([documentId, version])
+  @@index([clientId])
+}
+
+model KnowledgeChunk {
+  id              String            @id @default(dbgenerated("app_uuid_v7()"))
+  documentId      String
+  clientId        String
+  documentVersion Int
+  chunkIndex      Int
+  content         String
+  searchVector    Unsupported("tsvector")?
+  embedding       Json?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  client          Client            @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  document        KnowledgeDocument @relation(fields: [documentId], references: [id], onDelete: Restrict)
+
+  @@unique([documentId, documentVersion, chunkIndex])
+  @@index([clientId, documentId, documentVersion])
+}
+
+model KnowledgeProcessingJob {
+  id            String                       @id @default(dbgenerated("app_uuid_v7()"))
+  documentId    String
+  clientId      String
+  targetVersion Int
+  status        KnowledgeProcessingJobStatus @default(QUEUED)
+  stage         KnowledgeProcessingStage     @default(CLEANING)
+  error         String?
+  startedAt     DateTime?
+  completedAt   DateTime?
+  createdAt     DateTime                     @default(now())
+  client        Client                       @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  document      KnowledgeDocument            @relation(fields: [documentId], references: [id], onDelete: Restrict)
+
+  @@index([clientId, status])
+  @@index([documentId, targetVersion])
+}
+
 model ConfigVersion {
   id            String   @id @default(dbgenerated("app_uuid_v7()"))
   clientId      String
@@ -358,6 +480,10 @@ model Message {
   conversationId String
   role           String
   body           String
+  configurationVersion Int?
+  knowledgeVersion String?
+  aiSettingsVersion Int?
+  businessConfigVersion String?
   createdAt      DateTime     @default(now())
   conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
 }
