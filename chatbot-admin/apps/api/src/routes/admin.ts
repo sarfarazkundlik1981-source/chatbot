@@ -5,11 +5,17 @@ import { sendError, sendSuccess } from "../lib/api-response.js";
 import { requireAuth, requirePlatformRole } from "../middleware/auth.js";
 import { createClient, createPlatformUser, createPluginRelease, getCompatibilityRules, getCompatibilitySummary, getSecurityEventsSummary, listClients, listPlatformUsers, listPluginReleases, listSecurityEvents } from "../services/admin-service.js";
 
-const createClientSchema = z.object({
-  name: z.string().min(1),
-  domain: z.string().min(3),
-  plugin_secret: z.string().min(8)
-});
+const createClientSchema = z
+  .object({
+    name: z.string().min(1),
+    domain: z.string().min(3),
+    activation_code: z.string().min(8).optional(),
+    plugin_secret: z.string().min(8).optional()
+  })
+  .refine((value) => Boolean(value.activation_code || value.plugin_secret), {
+    message: "Activation code is required.",
+    path: ["activation_code"]
+  });
 
 const createPlatformUserSchema = z.object({
   email: z.string().email(),
@@ -41,7 +47,7 @@ adminRouter.post("/platform/clients", async (req, res) => {
   const client = await createClient({
     name: parsed.data.name,
     domain: parsed.data.domain,
-    pluginSecret: parsed.data.plugin_secret,
+    pluginSecret: parsed.data.activation_code ?? parsed.data.plugin_secret ?? "",
     actorId: (res.locals.auth as { sub?: string } | undefined)?.sub,
     requestId: res.locals.requestId as string
   });

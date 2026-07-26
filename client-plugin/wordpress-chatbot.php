@@ -3,7 +3,7 @@
  * Plugin Name: WordPress Chatbot Connector
  * Plugin URI: https://example.com
  * Description: Thin connector plugin for the centralized WordPress AI chatbot platform.
- * Version: 0.1.2
+ * Version: 0.1.4
  * Requires at least: 6.5
  * Requires PHP: 8.1
  * Author: Platform Team
@@ -13,7 +13,7 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-define('WCP_PLUGIN_VERSION', '0.1.2');
+define('WCP_PLUGIN_VERSION', '0.1.4');
 define('WCP_OPTION_KEY', 'wcp_connector_settings');
 define('WCP_HEARTBEAT_HOOK', 'wcp_server_heartbeat');
 
@@ -26,18 +26,17 @@ function wcp_get_settings(): array
 {
     $defaults = [
         'backend_url' => '',
-        'client_id' => '',
-        'client_secret' => '',
+        'installation_id' => '',
+        'installation_secret' => '',
+        'activation_code' => '',
         'display_mode' => 'floating',
         'trigger_selector' => '',
         'desktop_only' => '0',
         'mobile_only' => '0',
         'hide_logged_in' => '0',
-        'hide_checkout' => '1',
+        'hide_checkout' => '0',
         'include_pages' => '',
         'exclude_pages' => '',
-        'notify_admin' => '0',
-        'notify_email' => get_option('admin_email'),
     ];
 
     $settings = get_option(WCP_OPTION_KEY, []);
@@ -45,17 +44,32 @@ function wcp_get_settings(): array
         return $defaults;
     }
 
-    return array_merge($defaults, $settings);
+    $stored = array_merge($defaults, $settings);
+    return [
+        'backend_url' => (string) ($stored['backend_url'] ?? ''),
+        'installation_id' => (string) ($stored['installation_id'] ?? $stored['client_id'] ?? ''),
+        'installation_secret' => (string) ($stored['installation_secret'] ?? $stored['client_secret'] ?? ''),
+        'activation_code' => '',
+        'display_mode' => 'floating',
+        'trigger_selector' => '',
+        'desktop_only' => '0',
+        'mobile_only' => '0',
+        'hide_logged_in' => '0',
+        'hide_checkout' => '0',
+        'include_pages' => '',
+        'exclude_pages' => '',
+    ];
 }
 
-function wcp_clear_bootstrap_cache(?string $clientId = null): void
+function wcp_clear_bootstrap_cache(?string $installationId = null): void
 {
     $domain = wcp_get_site_domain();
-    if (!$domain || !$clientId) {
+    if (!$domain || !$installationId) {
         return;
     }
 
-    delete_transient('wcp_bootstrap_' . md5($clientId . '|' . $domain));
+    delete_transient('wcp_bootstrap_' . md5($installationId . '|' . $domain));
+    delete_transient('wcp_admin_config_' . md5($installationId . '|' . $domain));
 }
 
 function wcp_normalize_settings(array $input, ?array $existing = null): array
@@ -64,26 +78,21 @@ function wcp_normalize_settings(array $input, ?array $existing = null): array
 
     $normalized = [
         'backend_url' => esc_url_raw(trim((string) ($input['backend_url'] ?? ''))),
-        'client_id' => sanitize_text_field((string) ($input['client_id'] ?? '')),
-        'client_secret' => trim((string) ($input['client_secret'] ?? '')),
-        'display_mode' => sanitize_text_field((string) ($input['display_mode'] ?? 'floating')),
-        'trigger_selector' => sanitize_text_field((string) ($input['trigger_selector'] ?? '')),
-        'desktop_only' => !empty($input['desktop_only']) ? '1' : '0',
-        'mobile_only' => !empty($input['mobile_only']) ? '1' : '0',
-        'hide_logged_in' => !empty($input['hide_logged_in']) ? '1' : '0',
-        'hide_checkout' => !empty($input['hide_checkout']) ? '1' : '0',
-        'include_pages' => sanitize_text_field((string) ($input['include_pages'] ?? '')),
-        'exclude_pages' => sanitize_text_field((string) ($input['exclude_pages'] ?? '')),
-        'notify_admin' => !empty($input['notify_admin']) ? '1' : '0',
-        'notify_email' => sanitize_email((string) ($input['notify_email'] ?? '')),
+        'installation_id' => sanitize_text_field((string) ($input['installation_id'] ?? $existing['installation_id'] ?? '')),
+        'installation_secret' => trim((string) ($input['installation_secret'] ?? $existing['installation_secret'] ?? '')),
+        'activation_code' => sanitize_text_field((string) ($input['activation_code'] ?? '')),
+        'display_mode' => 'floating',
+        'trigger_selector' => '',
+        'desktop_only' => '0',
+        'mobile_only' => '0',
+        'hide_logged_in' => '0',
+        'hide_checkout' => '0',
+        'include_pages' => '',
+        'exclude_pages' => '',
     ];
 
-    if ($normalized['client_secret'] === '') {
-        $normalized['client_secret'] = (string) ($existing['client_secret'] ?? '');
-    }
-
-    if (!in_array($normalized['display_mode'], ['floating', 'embed', 'button', 'popup'], true)) {
-        $normalized['display_mode'] = 'floating';
+    if ($normalized['installation_secret'] === '' && $normalized['activation_code'] === '') {
+        $normalized['installation_secret'] = (string) ($existing['installation_secret'] ?? '');
     }
 
     return $normalized;
@@ -100,11 +109,11 @@ function wcp_sanitize_settings($input): array
 
     if (
         ($existing['backend_url'] ?? '') !== ($normalized['backend_url'] ?? '') ||
-        ($existing['client_id'] ?? '') !== ($normalized['client_id'] ?? '') ||
-        ($existing['client_secret'] ?? '') !== ($normalized['client_secret'] ?? '')
+        ($existing['installation_id'] ?? '') !== ($normalized['installation_id'] ?? '') ||
+        ($existing['installation_secret'] ?? '') !== ($normalized['installation_secret'] ?? '')
     ) {
-        wcp_clear_bootstrap_cache((string) ($existing['client_id'] ?? ''));
-        wcp_clear_bootstrap_cache((string) ($normalized['client_id'] ?? ''));
+        wcp_clear_bootstrap_cache((string) ($existing['installation_id'] ?? ''));
+        wcp_clear_bootstrap_cache((string) ($normalized['installation_id'] ?? ''));
     }
 
     return $normalized;
@@ -115,77 +124,8 @@ function wcp_register_settings(): void
     register_setting('wcp_connector', WCP_OPTION_KEY, [
         'sanitize_callback' => 'wcp_sanitize_settings',
     ]);
-
-    add_settings_section('wcp_main', 'Connector Settings', '__return_empty_string', 'wcp_connector');
-
-    foreach ([
-        'backend_url' => 'Backend URL',
-        'client_id' => 'Client ID',
-        'client_secret' => 'Client Secret',
-        'display_mode' => 'Display Mode',
-        'trigger_selector' => 'Trigger Selector',
-        'desktop_only' => 'Desktop Only',
-        'mobile_only' => 'Mobile Only',
-        'hide_logged_in' => 'Hide For Logged-in Users',
-        'hide_checkout' => 'Hide On Checkout',
-        'include_pages' => 'Show Only On Pages',
-        'exclude_pages' => 'Hide On Pages',
-        'notify_admin' => 'Lead Email Notification',
-        'notify_email' => 'Notification Email',
-    ] as $key => $label) {
-        add_settings_field($key, $label, 'wcp_render_field', 'wcp_connector', 'wcp_main', ['key' => $key]);
-    }
 }
 add_action('admin_init', 'wcp_register_settings');
-
-function wcp_render_field(array $args): void
-{
-    $settings = wcp_get_settings();
-    $key = $args['key'];
-    if ($key === 'display_mode') {
-        ?>
-        <select name="<?php echo esc_attr(WCP_OPTION_KEY); ?>[display_mode]">
-            <?php foreach (['floating', 'embed', 'button', 'popup'] as $mode) : ?>
-                <option value="<?php echo esc_attr($mode); ?>" <?php selected($settings['display_mode'] ?? 'floating', $mode); ?>><?php echo esc_html(ucfirst($mode)); ?></option>
-            <?php endforeach; ?>
-        </select>
-        <?php
-        return;
-    }
-
-    if (in_array($key, ['desktop_only', 'mobile_only', 'hide_logged_in', 'hide_checkout', 'notify_admin'], true)) {
-        printf(
-            '<label><input type="checkbox" name="%s[%s]" value="1" %s /> Enabled</label>',
-            esc_attr(WCP_OPTION_KEY),
-            esc_attr($key),
-            checked($settings[$key] ?? '0', '1', false)
-        );
-        return;
-    }
-
-    $type = $key === 'client_secret' ? 'password' : 'text';
-    if ($key === 'client_secret') {
-        printf(
-            '<input type="%s" name="%s[%s]" value="" class="regular-text" autocomplete="new-password" placeholder="%s" />',
-            esc_attr($type),
-            esc_attr(WCP_OPTION_KEY),
-            esc_attr($key),
-            esc_attr(!empty($settings['client_secret']) ? 'Leave blank to keep the saved secret' : 'Enter client secret')
-        );
-        if (!empty($settings['client_secret'])) {
-            echo '<p class="description">A client secret is already saved. Enter a new one only if you want to replace it.</p>';
-        }
-        return;
-    }
-
-    printf(
-        '<input type="%s" name="%s[%s]" value="%s" class="regular-text" />',
-        esc_attr($type),
-        esc_attr(WCP_OPTION_KEY),
-        esc_attr($key),
-        esc_attr($settings[$key] ?? '')
-    );
-}
 
 function wcp_register_menu(): void
 {
@@ -201,12 +141,38 @@ add_action('admin_menu', 'wcp_register_menu');
 
 function wcp_render_settings_page(): void
 {
+    $settings = wcp_get_settings();
     $status = sanitize_text_field((string) ($_GET['wcp_status'] ?? ''));
     $message = sanitize_text_field((string) ($_GET['wcp_message'] ?? ''));
     $compatibility = sanitize_text_field((string) ($_GET['wcp_compatibility'] ?? ''));
+    $config = null;
+    $configError = null;
+
+    if (!empty($settings['backend_url']) && !empty($settings['installation_id']) && !empty($settings['installation_secret'])) {
+        $loadedConfig = wcp_get_admin_widget_config();
+        if (is_wp_error($loadedConfig)) {
+            $configError = $loadedConfig->get_error_message();
+        } else {
+            $config = $loadedConfig;
+        }
+    }
     ?>
     <div class="wrap">
         <h1>Chatbot Connector</h1>
+        <style>
+            .wcp-card-grid { display: grid; gap: 16px; max-width: 720px; }
+            .wcp-card { background: #fff; border: 1px solid #dcdcde; border-radius: 8px; padding: 22px; }
+            .wcp-card h2 { margin-top: 0; }
+            .wcp-status { display: inline-flex; align-items: center; gap: 8px; font-weight: 600; }
+            .wcp-status-dot { width: 10px; height: 10px; border-radius: 999px; background: #d63638; }
+            .wcp-status.connected .wcp-status-dot { background: #00a32a; }
+            .wcp-summary { display: grid; gap: 18px; margin-top: 8px; font-size: 15px; }
+            .wcp-summary-block strong { display: block; margin-bottom: 4px; }
+            .wcp-feature-list { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; }
+            .wcp-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+            .wcp-actions form { margin: 0; }
+            .wcp-muted { color: #646970; }
+        </style>
         <?php if ($status && $message) : ?>
             <div class="notice notice-<?php echo $status === 'success' ? 'success' : 'error'; ?> is-dismissible">
                 <p>
@@ -218,18 +184,121 @@ function wcp_render_settings_page(): void
                 </p>
             </div>
         <?php endif; ?>
-        <form method="post" action="options.php">
-            <?php
-            settings_fields('wcp_connector');
-            wp_nonce_field('wcp_test_connection', 'wcp_test_connection_nonce');
-            do_settings_sections('wcp_connector');
-            submit_button('Save Settings');
-            ?>
-            <button type="submit" class="button button-secondary" name="action" value="wcp_test_connection" formaction="<?php echo esc_url(admin_url('admin-post.php')); ?>" formmethod="post">Save and Test Connection</button>
-        </form>
-        <p class="description">Save and Test Connection stores the current values, clears cached verification state, and tests exactly what the live widget will use.</p>
+
+        <div class="wcp-card-grid">
+            <div class="wcp-card">
+                <?php if ($config) : ?>
+                    <?php wcp_render_connected_summary($config); ?>
+                <?php elseif ($configError) : ?>
+                    <h2>Connect Account</h2>
+                    <p class="wcp-status"><span class="wcp-status-dot"></span> Not connected: <?php echo esc_html($configError); ?></p>
+                    <?php if (!empty($settings['installation_id']) && !empty($settings['installation_secret'])) : ?>
+                        <?php wcp_render_connection_actions(); ?>
+                    <?php endif; ?>
+                    <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
+                        <input type="hidden" name="action" value="wcp_test_connection" />
+                        <?php wp_nonce_field('wcp_test_connection', 'wcp_test_connection_nonce'); ?>
+                        <?php wcp_render_connection_fields($settings); ?>
+                        <?php submit_button('Connect Account'); ?>
+                    </form>
+                <?php else : ?>
+                    <h2>Connect Account</h2>
+                    <p class="wcp-status"><span class="wcp-status-dot"></span> Enter the activation code from platform admin.</p>
+                    <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
+                        <input type="hidden" name="action" value="wcp_test_connection" />
+                        <?php wp_nonce_field('wcp_test_connection', 'wcp_test_connection_nonce'); ?>
+                        <?php wcp_render_connection_fields($settings); ?>
+                        <?php submit_button('Connect Account'); ?>
+                    </form>
+                <?php endif; ?>
+            </div>
+        </div>
     </div>
     <?php
+}
+
+function wcp_render_connection_fields(array $settings): void
+{
+    ?>
+    <table class="form-table" role="presentation">
+        <tbody>
+            <tr>
+                <th scope="row"><label for="wcp_backend_url">Platform URL</label></th>
+                <td><input id="wcp_backend_url" class="regular-text" type="url" name="<?php echo esc_attr(WCP_OPTION_KEY); ?>[backend_url]" value="<?php echo esc_attr((string) ($settings['backend_url'] ?? '')); ?>" placeholder="https://platform.example.com" required /></td>
+            </tr>
+            <tr>
+                <th scope="row"><label for="wcp_activation_code">Activation Code</label></th>
+                <td><input id="wcp_activation_code" class="regular-text" type="text" name="<?php echo esc_attr(WCP_OPTION_KEY); ?>[activation_code]" value="" autocomplete="one-time-code" placeholder="ABCD-EFGH-IJKL" required /></td>
+            </tr>
+        </tbody>
+    </table>
+    <?php
+}
+
+function wcp_render_connected_summary(array $config): void
+{
+    $businessName = (string) ($config['business']['name'] ?? '');
+    if (!$businessName) {
+        $businessName = get_bloginfo('name') ?: 'Connected business';
+    }
+
+    echo '<h2>&#9989; Connected</h2>';
+    echo '<div class="wcp-summary">';
+    echo '<div class="wcp-summary-block"><strong>Business:</strong>' . esc_html($businessName) . '</div>';
+    echo '<div class="wcp-summary-block"><strong>Platform Status:</strong>Connected</div>';
+    echo '<div class="wcp-summary-block"><strong>Features Enabled:</strong>';
+    wcp_render_enabled_features($config);
+    echo '</div>';
+    echo '<p class="description">To change settings, visit your Platform Admin.</p>';
+    wcp_render_connection_actions();
+    echo '</div>';
+}
+
+function wcp_render_connection_actions(): void
+{
+    ?>
+    <div class="wcp-actions">
+        <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
+            <input type="hidden" name="action" value="wcp_reconnect" />
+            <?php wp_nonce_field('wcp_reconnect', 'wcp_reconnect_nonce'); ?>
+            <?php submit_button('Reconnect', 'secondary', 'submit', false); ?>
+        </form>
+        <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
+            <input type="hidden" name="action" value="wcp_disconnect" />
+            <?php wp_nonce_field('wcp_disconnect', 'wcp_disconnect_nonce'); ?>
+            <?php submit_button('Disconnect', 'delete', 'submit', false); ?>
+        </form>
+    </div>
+    <?php
+}
+
+function wcp_render_enabled_features(array $config): void
+{
+    $features = ['AI Chat'];
+    if (!empty($config['callback_request']['enabled']) || !empty($config['appointment_request']['enabled']) || !empty($config['quote_calculator']['enabled'])) {
+        $features[] = 'Lead Capture';
+    }
+    if (!empty($config['business_hours']['enabled'])) {
+        $features[] = 'Business Hours';
+    }
+    if (!empty($config['appointment_request']['enabled'])) {
+        $features[] = 'Appointment Booking';
+    }
+    if (!empty($config['callback_request']['enabled'])) {
+        $features[] = 'Callback Requests';
+    }
+    if (!empty($config['service_area']['enabled'])) {
+        $features[] = 'Service Area';
+    }
+    if (!empty($config['quote_calculator']['enabled'])) {
+        $features[] = 'Instant Quote';
+    }
+
+    echo '<ul class="wcp-feature-list">';
+    foreach (array_values(array_unique($features)) as $feature) {
+        echo '<li>&#10003; ' . esc_html($feature) . '</li>';
+    }
+    echo '</ul>';
 }
 
 function wcp_enqueue_assets(): void
@@ -249,7 +318,8 @@ function wcp_enqueue_assets(): void
     $settings = wcp_get_settings();
     wp_localize_script('wcp-widget', 'WCP_CONFIG', [
         'backendUrl' => esc_url_raw($settings['backend_url']),
-        'clientId' => sanitize_text_field($settings['client_id']),
+        'installationId' => sanitize_text_field($settings['installation_id']),
+        'connectorId' => sanitize_text_field($settings['installation_id']),
         'pluginVersion' => WCP_PLUGIN_VERSION,
         'siteUrl' => home_url('/'),
         'siteHost' => wcp_get_site_domain(),
@@ -269,7 +339,6 @@ function wcp_enqueue_assets(): void
         'isLoggedIn' => is_user_logged_in(),
         'currentPath' => wp_parse_url(home_url(add_query_arg([], $GLOBALS['wp']->request ?? '')), PHP_URL_PATH) ?: '/',
         'ajaxUrl' => admin_url('admin-ajax.php'),
-        'notifyAdmin' => !empty($settings['notify_admin']),
         'proxyNonce' => wp_create_nonce('wcp_proxy_request'),
     ]);
 
@@ -281,7 +350,7 @@ function wcp_backend_request(string $path, array $body, array $headers = [], ?ar
 {
     $settings = $settingsOverride ?: wcp_get_settings();
     $backend_url = untrailingslashit((string) ($settings['backend_url'] ?? ''));
-    if (!$backend_url || empty($settings['client_id']) || empty($settings['client_secret'])) {
+    if (!$backend_url || ($path !== '/activate' && (empty($settings['installation_id']) || empty($settings['installation_secret'])))) {
         return new WP_Error('wcp_not_configured', 'Connector settings are incomplete.');
     }
 
@@ -291,6 +360,32 @@ function wcp_backend_request(string $path, array $body, array $headers = [], ?ar
             'Content-Type' => 'application/json',
         ], $headers),
         'body' => wp_json_encode($body),
+    ]);
+
+    if (is_wp_error($response)) {
+        return $response;
+    }
+
+    $payload = json_decode((string) wp_remote_retrieve_body($response), true);
+    $rawBody = (string) wp_remote_retrieve_body($response);
+    return [
+        'status' => (int) wp_remote_retrieve_response_code($response),
+        'payload' => is_array($payload) ? $payload : [],
+        'raw_body' => $rawBody,
+    ];
+}
+
+function wcp_backend_get(string $path, array $headers = [], ?array $settingsOverride = null)
+{
+    $settings = $settingsOverride ?: wcp_get_settings();
+    $backend_url = untrailingslashit((string) ($settings['backend_url'] ?? ''));
+    if (!$backend_url) {
+        return new WP_Error('wcp_not_configured', 'Backend URL is required.');
+    }
+
+    $response = wp_remote_get($backend_url . '/api/v1/plugin' . $path, [
+        'timeout' => 15,
+        'headers' => $headers,
     ]);
 
     if (is_wp_error($response)) {
@@ -341,22 +436,22 @@ function wcp_verify_backend_session()
         return new WP_Error('wcp_invalid_domain', 'Site domain could not be determined.');
     }
 
-    $cache_key = 'wcp_bootstrap_' . md5((string) $settings['client_id'] . '|' . $domain);
+    $cache_key = 'wcp_bootstrap_' . md5((string) $settings['installation_id'] . '|' . $domain);
     $cached = get_transient($cache_key);
     if (is_array($cached) && !empty($cached['token'])) {
         return $cached;
     }
 
-    $result = wcp_backend_request('/verify', [
-        'client_id' => sanitize_text_field((string) $settings['client_id']),
-        'client_secret' => sanitize_text_field((string) $settings['client_secret']),
+    $result = wcp_backend_request('/verify-installation', [
+        'installation_id' => sanitize_text_field((string) $settings['installation_id']),
+        'installation_secret' => sanitize_text_field((string) $settings['installation_secret']),
         'domain' => $domain,
         'plugin_version' => WCP_PLUGIN_VERSION,
         'wordpress_version' => get_bloginfo('version'),
         'php_version' => PHP_VERSION,
         'elementor_version' => defined('ELEMENTOR_VERSION') ? ELEMENTOR_VERSION : '',
     ], [
-        'Idempotency-Key' => 'verify-' . md5($domain . '|' . WCP_PLUGIN_VERSION),
+        'Idempotency-Key' => 'verify-installation-' . md5($domain . '|' . (string) $settings['installation_id'] . '|' . hash('sha256', (string) $settings['installation_secret']) . '|' . WCP_PLUGIN_VERSION),
     ]);
 
     if (is_wp_error($result)) {
@@ -381,23 +476,43 @@ function wcp_run_connection_test(?array $settingsOverride = null)
         return new WP_Error('wcp_invalid_domain', 'Site domain could not be determined.');
     }
 
-    if (empty($settings['backend_url']) || empty($settings['client_id']) || empty($settings['client_secret'])) {
-        return new WP_Error('wcp_not_configured', 'Backend URL, Client ID, and Client Secret are required.');
+    if (empty($settings['backend_url'])) {
+        return new WP_Error('wcp_not_configured', 'Platform URL is required.');
     }
 
-    delete_transient('wcp_bootstrap_' . md5((string) $settings['client_id'] . '|' . $domain));
+    $activationCode = sanitize_text_field((string) ($settings['activation_code'] ?? ''));
+    $hasStoredCredentials = !empty($settings['installation_id']) && !empty($settings['installation_secret']);
+    if (!$activationCode && !$hasStoredCredentials) {
+        return new WP_Error('wcp_not_configured', 'Activation code is required.');
+    }
 
-    $result = wcp_backend_request('/verify', [
-        'client_id' => sanitize_text_field((string) $settings['client_id']),
-        'client_secret' => sanitize_text_field((string) $settings['client_secret']),
-        'domain' => $domain,
-        'plugin_version' => WCP_PLUGIN_VERSION,
-        'wordpress_version' => get_bloginfo('version'),
-        'php_version' => PHP_VERSION,
-        'elementor_version' => defined('ELEMENTOR_VERSION') ? ELEMENTOR_VERSION : '',
-    ], [
-        'Idempotency-Key' => 'verify-' . md5($domain . '|' . WCP_PLUGIN_VERSION . '|manual-test'),
-    ], $settings);
+    delete_transient('wcp_bootstrap_' . md5((string) $settings['installation_id'] . '|' . $domain));
+    delete_transient('wcp_admin_config_' . md5((string) $settings['installation_id'] . '|' . $domain));
+
+    if ($activationCode) {
+        $result = wcp_backend_request('/activate', [
+            'activation_code' => $activationCode,
+            'domain' => $domain,
+            'plugin_version' => WCP_PLUGIN_VERSION,
+            'wordpress_version' => get_bloginfo('version'),
+            'php_version' => PHP_VERSION,
+            'elementor_version' => defined('ELEMENTOR_VERSION') ? ELEMENTOR_VERSION : '',
+        ], [
+            'Idempotency-Key' => 'activate-' . md5($domain . '|' . hash('sha256', $activationCode) . '|' . microtime(true)),
+        ], $settings);
+    } else {
+        $result = wcp_backend_request('/verify-installation', [
+            'installation_id' => sanitize_text_field((string) $settings['installation_id']),
+            'installation_secret' => sanitize_text_field((string) $settings['installation_secret']),
+            'domain' => $domain,
+            'plugin_version' => WCP_PLUGIN_VERSION,
+            'wordpress_version' => get_bloginfo('version'),
+            'php_version' => PHP_VERSION,
+            'elementor_version' => defined('ELEMENTOR_VERSION') ? ELEMENTOR_VERSION : '',
+        ], [
+            'Idempotency-Key' => 'verify-installation-test-' . md5($domain . '|' . (string) $settings['installation_id'] . '|' . hash('sha256', (string) $settings['installation_secret']) . '|' . microtime(true)),
+        ], $settings);
+    }
 
     if (is_wp_error($result)) {
         return $result;
@@ -415,7 +530,81 @@ function wcp_run_connection_test(?array $settingsOverride = null)
         );
     }
 
-    return $result['payload']['data'] ?? [];
+    $data = $result['payload']['data'] ?? [];
+    if (!empty($data['installation_id']) && !empty($data['installation_secret'])) {
+        $settings['installation_id'] = sanitize_text_field((string) $data['installation_id']);
+        $settings['installation_secret'] = sanitize_text_field((string) $data['installation_secret']);
+        $settings['activation_code'] = '';
+    }
+    $config = wcp_fetch_widget_config_for_admin((string) ($data['token'] ?? ''), $settings);
+    if (!is_wp_error($config)) {
+        $data['widget_config'] = $config;
+    }
+
+    return $data;
+}
+
+function wcp_fetch_widget_config_for_admin(string $token, ?array $settingsOverride = null)
+{
+    if (!$token) {
+        return new WP_Error('wcp_missing_token', 'Connection token is missing.');
+    }
+
+    $settings = $settingsOverride ?: wcp_get_settings();
+    $domain = wcp_get_site_domain();
+    $cache_key = 'wcp_admin_config_' . md5((string) ($settings['installation_id'] ?? '') . '|' . $domain);
+    $cached = get_transient($cache_key);
+    if (is_array($cached)) {
+        return $cached;
+    }
+
+    $result = wcp_backend_get('/widget-config', [
+        'Authorization' => 'Bearer ' . $token,
+    ], $settings);
+
+    if (is_wp_error($result)) {
+        return $result;
+    }
+
+    if (($result['status'] ?? 500) >= 400 || empty($result['payload']['success'])) {
+        return new WP_Error('wcp_config_failed', (string) ($result['payload']['error']['message'] ?? 'Widget configuration could not be loaded.'));
+    }
+
+    $config = $result['payload']['data'] ?? [];
+    if (is_array($config)) {
+        set_transient($cache_key, $config, 5 * MINUTE_IN_SECONDS);
+    }
+
+    return $config;
+}
+
+function wcp_get_admin_widget_config()
+{
+    $verification = wcp_verify_backend_session();
+    if (is_wp_error($verification)) {
+        return $verification;
+    }
+
+    return wcp_fetch_widget_config_for_admin((string) ($verification['token'] ?? ''));
+}
+
+function wcp_settings_page_url(): string
+{
+    return add_query_arg(
+        [
+            'page' => 'wcp-connector',
+        ],
+        admin_url('options-general.php')
+    );
+}
+
+function wcp_redirect_with_status(string $status, string $message, array $extra = []): void
+{
+    wp_safe_redirect(add_query_arg(array_merge([
+        'wcp_status' => $status,
+        'wcp_message' => $message,
+    ], $extra), wcp_settings_page_url()));
+    exit;
 }
 
 function wcp_handle_test_connection(): void
@@ -426,45 +615,69 @@ function wcp_handle_test_connection(): void
 
     check_admin_referer('wcp_test_connection', 'wcp_test_connection_nonce');
 
-    $redirectUrl = add_query_arg(
-        [
-            'page' => 'wcp-connector',
-        ],
-        admin_url('options-general.php')
-    );
-
     $postedSettings = $_POST[WCP_OPTION_KEY] ?? [];
     $settings = is_array($postedSettings) ? wcp_normalize_settings($postedSettings, wcp_get_settings()) : wcp_get_settings();
-    update_option(WCP_OPTION_KEY, $settings);
-    wcp_clear_bootstrap_cache((string) ($settings['client_id'] ?? ''));
 
     $result = wcp_run_connection_test($settings);
     if (is_wp_error($result)) {
-        wp_safe_redirect(
-            add_query_arg(
-                [
-                    'wcp_status' => 'error',
-                    'wcp_message' => $result->get_error_message(),
-                ],
-                $redirectUrl
-            )
-        );
-        exit;
+        wcp_redirect_with_status('error', $result->get_error_message());
     }
 
-    wp_safe_redirect(
-        add_query_arg(
-            [
-                'wcp_status' => 'success',
-                'wcp_message' => 'Connected successfully.',
-                'wcp_compatibility' => (string) ($result['compatibility_status'] ?? 'compatible'),
-            ],
-            $redirectUrl
-        )
-    );
-    exit;
+    if (!empty($result['installation_id']) && !empty($result['installation_secret'])) {
+        $settings['installation_id'] = sanitize_text_field((string) $result['installation_id']);
+        $settings['installation_secret'] = sanitize_text_field((string) $result['installation_secret']);
+    }
+    $settings['activation_code'] = '';
+
+    update_option(WCP_OPTION_KEY, $settings);
+    wcp_clear_bootstrap_cache((string) ($settings['installation_id'] ?? ''));
+
+    wcp_redirect_with_status('success', 'Connected successfully.', [
+        'wcp_compatibility' => (string) ($result['compatibility_status'] ?? 'compatible'),
+    ]);
 }
 add_action('admin_post_wcp_test_connection', 'wcp_handle_test_connection');
+
+function wcp_handle_reconnect(): void
+{
+    if (!current_user_can('manage_options')) {
+        wp_die('You do not have permission to access this page.');
+    }
+
+    check_admin_referer('wcp_reconnect', 'wcp_reconnect_nonce');
+
+    $settings = wcp_get_settings();
+    $result = wcp_run_connection_test($settings);
+    if (is_wp_error($result)) {
+        wcp_redirect_with_status('error', $result->get_error_message());
+    }
+
+    wcp_redirect_with_status('success', 'Reconnected successfully.', [
+        'wcp_compatibility' => (string) ($result['compatibility_status'] ?? 'compatible'),
+    ]);
+}
+add_action('admin_post_wcp_reconnect', 'wcp_handle_reconnect');
+
+function wcp_handle_disconnect(): void
+{
+    if (!current_user_can('manage_options')) {
+        wp_die('You do not have permission to access this page.');
+    }
+
+    check_admin_referer('wcp_disconnect', 'wcp_disconnect_nonce');
+
+    $settings = wcp_get_settings();
+    wcp_clear_bootstrap_cache((string) ($settings['installation_id'] ?? ''));
+    update_option(WCP_OPTION_KEY, [
+        'backend_url' => (string) ($settings['backend_url'] ?? ''),
+        'installation_id' => '',
+        'installation_secret' => '',
+        'activation_code' => '',
+    ]);
+
+    wcp_redirect_with_status('success', 'Disconnected successfully.');
+}
+add_action('admin_post_wcp_disconnect', 'wcp_handle_disconnect');
 
 function wcp_send_server_heartbeat(): void
 {
@@ -480,7 +693,6 @@ function wcp_send_server_heartbeat(): void
     }
 
     wcp_backend_request('/heartbeat', [
-        'client_id' => sanitize_text_field((string) $settings['client_id']),
         'domain' => $domain,
         'plugin_version' => WCP_PLUGIN_VERSION,
         'wordpress_version' => get_bloginfo('version'),
@@ -573,22 +785,6 @@ function wcp_send_lead_notification(): void
 
     if (($result['status'] ?? 500) >= 400 || empty($result['payload']['success'])) {
         wp_send_json_error(['message' => (string) ($result['payload']['error']['message'] ?? 'Lead submission failed.')], $result['status'] ?? 500);
-    }
-
-    $settings = wcp_get_settings();
-    if (!empty($settings['notify_admin'])) {
-        $email = sanitize_email((string) ($settings['notify_email'] ?? get_option('admin_email')));
-        if ($email) {
-            $site = home_url('/');
-            $subject = sprintf('New chatbot lead from %s', wp_parse_url($site, PHP_URL_HOST) ?: $site);
-            $body = "A new chatbot lead was submitted.\n\n";
-            $body .= "Name: {$name}\n";
-            $body .= "Email: {$lead_email}\n";
-            $body .= "Phone: {$phone}\n";
-            $body .= "Message: {$message}\n";
-            $body .= "Site: {$site}\n";
-            wp_mail($email, $subject, $body);
-        }
     }
 
     wp_send_json_success($result['payload']['data'] ?? ['submitted' => true]);

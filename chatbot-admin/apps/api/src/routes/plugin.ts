@@ -10,7 +10,7 @@ import { requireAuth } from "../middleware/auth.js";
 import { protectWidgetPublicEndpoint } from "../middleware/rate-limit.js";
 import { sendChatMessage, submitLead } from "../services/chat-service.js";
 import { calculateInstantQuote, evaluateServiceArea } from "../services/feature-service.js";
-import { createPluginSession, recordHeartbeat, resumePluginSession, verifyPlugin } from "../services/plugin-service.js";
+import { activatePlugin, createPluginSession, recordHeartbeat, resumePluginSession, verifyInstallationPlugin, verifyPlugin } from "../services/plugin-service.js";
 import { getWidgetConfig } from "../services/widget-service.js";
 import { requireIdempotency, requireIdempotencyHeader, persistIdempotentResponse } from "../lib/idempotency.js";
 
@@ -26,6 +26,20 @@ const verifySchema = z.object({
   config_version: z.number().int().nonnegative().optional()
 });
 
+const activateSchema = verifySchema.omit({
+  client_id: true,
+  client_secret: true
+}).extend({
+  activation_code: z.string().min(8)
+});
+
+const installationVerifySchema = activateSchema.omit({
+  activation_code: true
+}).extend({
+  installation_id: z.string().min(8),
+  installation_secret: z.string().min(20)
+});
+
 const heartbeatSchema = verifySchema.pick({
   client_id: true,
   domain: true,
@@ -34,7 +48,7 @@ const heartbeatSchema = verifySchema.pick({
   php_version: true,
   elementor_version: true,
   logo_url: true
-});
+}).partial({ client_id: true });
 
 const chatProtection = protectWidgetPublicEndpoint("chat", {
   ipBurst: { limit: 15, windowMs: 10_000 },
@@ -95,16 +109,120 @@ async function logPluginSecurityEvent(input: {
   severity?: string;
   payload?: Record<string, unknown>;
 }) {
-  await writeSecurityLog({
-    clientId: input.clientId,
-    requestId: input.requestId,
-    source: input.source,
-    severity: input.severity,
-    payload: input.payload
-  });
+  try {
+    await writeSecurityLog({
+      clientId: input.clientId,
+      requestId: input.requestId,
+      source: input.source,
+      severity: input.severity,
+      payload: input.payload
+    });
+  } catch {
+    return;
+  }
 }
 
 export const pluginRouter = Router();
+
+pluginRouter.post("/activate", requireIdempotency("plugin_activate"), requireIdempotencyHeader, async (req, res) => {
+  const parsed = activateSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return sendError(res, 422, "VALIDATION_ERROR", "Plugin activation payload is invalid.", {
+      issues: parsed.error.flatten()
+    });
+  }
+
+  try {
+    const activation = await activatePlugin(parsed.data);
+    const result = activation.data;
+    await eventBus.emit({ type: "plugin.verified", clientId: activation.clientId, domain: parsed.data.domain });
+    await logPluginSecurityEvent({
+      clientId: activation.clientId,
+      requestId: res.locals.requestId as string,
+      source: "plugin.activate_succeeded",
+      severity: "info",
+      payload: {
+        domain: parsed.data.domain,
+        plugin_version: parsed.data.plugin_version,
+        ip_hash: anonymizeIp(req.ip)
+      }
+    });
+    const payload = {
+      success: true,
+      data: result,
+      meta: { compatibility_status: result.compatibility_status, compatibility_details: result.compatibility_details },
+      request_id: res.locals.requestId as string
+    };
+    await persistIdempotentResponse("plugin_activate", req.header("Idempotency-Key") ?? undefined, payload);
+    return res.status(200).json(payload);
+  } catch (error) {
+    await logPluginSecurityEvent({
+      requestId: res.locals.requestId as string,
+      source: "plugin.activate_failed",
+      severity: "warning",
+      payload: {
+        domain: parsed.data.domain,
+        plugin_version: parsed.data.plugin_version,
+        ip_hash: anonymizeIp(req.ip),
+        reason_code: error instanceof AppError ? error.code : fallbackCodeFromUnknown(error),
+        reason_message: error instanceof Error ? error.message : "Plugin activation failed."
+      }
+    });
+    const statusCode = error instanceof AppError ? error.statusCode : 403;
+    const code = error instanceof AppError ? error.code : "PLUGIN_ACTIVATION_FAILED";
+    return sendError(res, statusCode, code, error instanceof Error ? error.message : "Plugin activation failed.");
+  }
+});
+
+pluginRouter.post("/verify-installation", requireIdempotency("plugin_installation_verify"), requireIdempotencyHeader, async (req, res) => {
+  const parsed = installationVerifySchema.safeParse(req.body);
+  if (!parsed.success) {
+    return sendError(res, 422, "VALIDATION_ERROR", "Plugin installation verification payload is invalid.", {
+      issues: parsed.error.flatten()
+    });
+  }
+
+  try {
+    const verification = await verifyInstallationPlugin(parsed.data);
+    const result = verification.data;
+    await eventBus.emit({ type: "plugin.verified", clientId: verification.clientId, domain: parsed.data.domain });
+    await logPluginSecurityEvent({
+      clientId: verification.clientId,
+      requestId: res.locals.requestId as string,
+      source: "plugin.installation_verify_succeeded",
+      severity: "info",
+      payload: {
+        domain: parsed.data.domain,
+        plugin_version: parsed.data.plugin_version,
+        ip_hash: anonymizeIp(req.ip)
+      }
+    });
+    const payload = {
+      success: true,
+      data: result,
+      meta: { compatibility_status: result.compatibility_status, compatibility_details: result.compatibility_details },
+      request_id: res.locals.requestId as string
+    };
+    await persistIdempotentResponse("plugin_installation_verify", req.header("Idempotency-Key") ?? undefined, payload);
+    return res.status(200).json(payload);
+  } catch (error) {
+    await logPluginSecurityEvent({
+      requestId: res.locals.requestId as string,
+      source: "plugin.installation_verify_failed",
+      severity: "warning",
+      payload: {
+        domain: parsed.data.domain,
+        plugin_version: parsed.data.plugin_version,
+        ip_hash: anonymizeIp(req.ip),
+        reason_code: error instanceof AppError ? error.code : fallbackCodeFromUnknown(error),
+        reason_message: error instanceof Error ? error.message : "Plugin installation verification failed."
+      }
+    });
+    const statusCode = error instanceof AppError ? error.statusCode : 403;
+    const code = error instanceof AppError ? error.code : "PLUGIN_INSTALLATION_VERIFY_FAILED";
+    return sendError(res, statusCode, code, error instanceof Error ? error.message : "Plugin installation verification failed.");
+  }
+});
 
 pluginRouter.post("/verify", requireIdempotency("plugin_verify"), requireIdempotencyHeader, async (req, res) => {
   const parsed = verifySchema.safeParse(req.body);
@@ -150,7 +268,9 @@ pluginRouter.post("/verify", requireIdempotency("plugin_verify"), requireIdempot
         reason_message: error instanceof Error ? error.message : "Plugin verification failed."
       }
     });
-    return sendError(res, 403, "PLUGIN_VERIFY_FAILED", error instanceof Error ? error.message : "Plugin verification failed.");
+    const statusCode = error instanceof AppError ? error.statusCode : 403;
+    const code = error instanceof AppError ? error.code : "PLUGIN_VERIFY_FAILED";
+    return sendError(res, statusCode, code, error instanceof Error ? error.message : "Plugin verification failed.");
   }
 });
 
@@ -171,7 +291,8 @@ pluginRouter.post("/heartbeat", requireAuth("plugin"), async (req, res) => {
   }
 
   const auth = res.locals.auth as { clientId?: string; domain?: string } | undefined;
-  if (auth?.clientId !== parsed.data.client_id || auth?.domain !== parsed.data.domain) {
+  const heartbeatClientId = parsed.data.client_id ?? auth?.clientId;
+  if (!auth?.clientId || auth.clientId !== heartbeatClientId || auth?.domain !== parsed.data.domain) {
     await logPluginSecurityEvent({
       clientId: auth?.clientId ?? parsed.data.client_id,
       requestId: res.locals.requestId as string,
@@ -187,12 +308,15 @@ pluginRouter.post("/heartbeat", requireAuth("plugin"), async (req, res) => {
   }
 
   try {
-    const compatibility = await recordHeartbeat(parsed.data);
-    await eventBus.emit({ type: "plugin.heartbeat_received", clientId: parsed.data.client_id, domain: parsed.data.domain });
+    const compatibility = await recordHeartbeat({
+      ...parsed.data,
+      client_id: auth.clientId
+    });
+    await eventBus.emit({ type: "plugin.heartbeat_received", clientId: auth.clientId, domain: parsed.data.domain });
     return sendSuccess(res, { accepted: true }, { compatibility_status: compatibility.status, compatibility_details: compatibility.details });
   } catch (error) {
     await logPluginSecurityEvent({
-      clientId: parsed.data.client_id,
+      clientId: auth.clientId,
       requestId: res.locals.requestId as string,
       source: "plugin.heartbeat_failed",
       severity: "warning",

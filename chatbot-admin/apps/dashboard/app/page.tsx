@@ -1,7 +1,19 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { clearFieldError, parseJsonInput } from "./feature-form-utils";
+import {
+  businessWeekdays,
+  clearFieldError,
+  defaultBusinessSchedule,
+  formatBusinessSchedule,
+  formatCtaLines,
+  formatKeyValueLines,
+  formatStringList,
+  parseCtaLines,
+  parseKeyValueLines,
+  parseStringList,
+  serializeBusinessSchedule
+} from "./feature-form-utils";
 
 type Session = {
   token: string;
@@ -113,6 +125,14 @@ function optionalText(value: string) {
   return trimmed ? trimmed : undefined;
 }
 
+function generateActivationCode() {
+  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  const groups = Array.from({ length: 3 }, () =>
+    Array.from({ length: 4 }, () => alphabet[Math.floor(Math.random() * alphabet.length)]).join("")
+  );
+  return groups.join("-");
+}
+
 function normalizeRequestBody(path: string, body: unknown) {
   if (!body || typeof body !== "object") {
     return body;
@@ -155,11 +175,13 @@ function normalizeRequestBody(path: string, body: unknown) {
   }
 
   if (path === "/platform/clients") {
+    const activationCode = String(record.activation_code ?? record.plugin_secret ?? "").trim();
     return {
       ...record,
       name: String(record.name ?? "").trim(),
       domain: normalizeDomain(String(record.domain ?? "")),
-      plugin_secret: String(record.plugin_secret ?? "").trim()
+      plugin_secret: activationCode,
+      activation_code: activationCode
     };
   }
 
@@ -186,7 +208,7 @@ export default function HomePage() {
   const [flagDraft, setFlagDraft] = useState({ key: "", enabled: true });
   const [entitlementDraft, setEntitlementDraft] = useState({ key: "", allowed: true });
   const [unansweredAnswerDrafts, setUnansweredAnswerDrafts] = useState<Record<string, string>>({});
-  const [platformClientDraft, setPlatformClientDraft] = useState({ name: "", domain: "", plugin_secret: "" });
+  const [platformClientDraft, setPlatformClientDraft] = useState({ name: "", domain: "", plugin_secret: generateActivationCode() });
   const [platformUserDraft, setPlatformUserDraft] = useState({ email: "", password: "", role: "platform_admin" });
   const [pluginReleaseDraft, setPluginReleaseDraft] = useState({ version: "", download_url: "", release_notes: "" });
   const [settingsForm, setSettingsForm] = useState({
@@ -230,23 +252,23 @@ export default function HomePage() {
   const [knowledgeDraft, setKnowledgeDraft] = useState({
     type: "faq",
     title: "",
-    content: "{\n  \"answer\": \"\"\n}",
+    content: "",
     sort_order: 0,
     enabled: true
   });
   const [featureForms, setFeatureForms] = useState<Record<string, any>>({
-    business_hours: { enabled: false, timezone: "UTC", schedule: "{\n  \"mon\": { \"open\": \"09:00\", \"close\": \"17:00\" }\n}", notes: "", version: 1 },
-    out_of_hours: { enabled: false, greeting: "", limited_ctas: "[]", form_first_mode: false, visitor_message: "", version: 1 },
-    callback_config: { enabled: false, button_label: "Request a call", helper_text: "", success_message: "", required_fields: "[\"name\",\"phone\"]", version: 1 },
-    appointment_config: { enabled: false, title: "Request appointment", description: "", required_fields: "[\"name\",\"email\"]", success_message: "", version: 1 },
+    business_hours: { enabled: false, timezone: "UTC", schedule: defaultBusinessSchedule(), notes: "", version: 1 },
+    out_of_hours: { enabled: false, greeting: "", limited_ctas: "", form_first_mode: false, visitor_message: "", version: 1 },
+    callback_config: { enabled: false, button_label: "Request a call", helper_text: "", success_message: "", required_fields: "name\nphone", version: 1 },
+    appointment_config: { enabled: false, title: "Request appointment", description: "", required_fields: "name\nemail", success_message: "", version: 1 },
     service_area_config: { enabled: false, mode: "allowlist", input_label: "Enter your city or ZIP", success_message: "", failure_message: "", version: 1 },
     service_area_rule: { rule_type: "city", label: "", value: "", enabled: true, version: 1 },
     price_list_item: { category: "general", name: "", description: "", price: 0, currency: "USD", enabled: true, sort_order: 0, version: 1 },
     quote_config: { enabled: false, title: "Instant Quote", description: "", success_message: "", base_amount: 0, currency: "USD", version: 1 },
-    quote_field: { key: "", label: "", field_type: "text", required: false, options: "[]", multiplier: 1, sort_order: 0, version: 1 },
-    lead_qualification: { enabled: false, stages: "[\"new\",\"qualified\"]", required_fields: "[\"name\",\"email\"]", scoring_rules: "{}", success_message: "", version: 1 },
+    quote_field: { key: "", label: "", field_type: "text", required: false, options: "", multiplier: 1, sort_order: 0, version: 1 },
+    lead_qualification: { enabled: false, stages: "new\nqualified", required_fields: "name\nemail", scoring_rules: "", success_message: "", version: 1 },
     missed_alert_config: { enabled: false, conversation_delay_mins: 30, lead_delay_mins: 60, notify_platform_email: true, notify_wordpress_email: false, version: 1 },
-    emergency_detection: { enabled: false, keywords: "[\"emergency\",\"urgent\"]", response_message: "If this is an emergency, call emergency services or the business directly immediately.", escalate_label: "Emergency help", version: 1 },
+    emergency_detection: { enabled: false, keywords: "emergency\nurgent", response_message: "If this is an emergency, call emergency services or the business directly immediately.", escalate_label: "Emergency help", version: 1 },
     captcha_config: { provider: "disabled", site_key: "", secret_key: "", protect_lead: false, protect_callback: false, protect_appointment: false, protect_quote: false, protect_chat: false, min_score: 0.5, version: 1, secret_configured: false },
     faq_convert_answer: ""
   });
@@ -400,14 +422,14 @@ export default function HomePage() {
             business_hours: {
               enabled: features.data.businessHours?.enabled ?? false,
               timezone: features.data.businessHours?.timezone ?? "UTC",
-              schedule: JSON.stringify(features.data.businessHours?.schedule ?? { mon: { open: "09:00", close: "17:00" } }, null, 2),
+              schedule: formatBusinessSchedule(features.data.businessHours?.schedule),
               notes: features.data.businessHours?.notes ?? "",
               version: features.data.businessHours?.version ?? 1
             },
             out_of_hours: {
               enabled: features.data.outOfHours?.enabled ?? false,
               greeting: features.data.outOfHours?.greeting ?? "",
-              limited_ctas: JSON.stringify(features.data.outOfHours?.limitedCtas ?? [], null, 2),
+              limited_ctas: formatCtaLines(features.data.outOfHours?.limitedCtas),
               form_first_mode: features.data.outOfHours?.formFirstMode ?? false,
               visitor_message: features.data.outOfHours?.visitorMessage ?? "",
               version: features.data.outOfHours?.version ?? 1
@@ -417,14 +439,14 @@ export default function HomePage() {
               button_label: features.data.callbackConfig?.buttonLabel ?? "Request a call",
               helper_text: features.data.callbackConfig?.helperText ?? "",
               success_message: features.data.callbackConfig?.successMessage ?? "",
-              required_fields: JSON.stringify(features.data.callbackConfig?.requiredFields ?? ["name", "phone"], null, 2),
+              required_fields: formatStringList(features.data.callbackConfig?.requiredFields, ["name", "phone"]),
               version: features.data.callbackConfig?.version ?? 1
             },
             appointment_config: {
               enabled: features.data.appointmentConfig?.enabled ?? false,
               title: features.data.appointmentConfig?.title ?? "Request appointment",
               description: features.data.appointmentConfig?.description ?? "",
-              required_fields: JSON.stringify(features.data.appointmentConfig?.requiredFields ?? ["name", "email"], null, 2),
+              required_fields: formatStringList(features.data.appointmentConfig?.requiredFields, ["name", "email"]),
               success_message: features.data.appointmentConfig?.successMessage ?? "",
               version: features.data.appointmentConfig?.version ?? 1
             },
@@ -447,9 +469,9 @@ export default function HomePage() {
             },
             lead_qualification: {
               enabled: features.data.leadQualification?.enabled ?? false,
-              stages: JSON.stringify(features.data.leadQualification?.stages ?? ["new", "qualified"], null, 2),
-              required_fields: JSON.stringify(features.data.leadQualification?.requiredFields ?? ["name", "email"], null, 2),
-              scoring_rules: JSON.stringify(features.data.leadQualification?.scoringRules ?? {}, null, 2),
+              stages: formatStringList(features.data.leadQualification?.stages, ["new", "qualified"]),
+              required_fields: formatStringList(features.data.leadQualification?.requiredFields, ["name", "email"]),
+              scoring_rules: formatKeyValueLines(features.data.leadQualification?.scoringRules),
               success_message: features.data.leadQualification?.successMessage ?? "",
               version: features.data.leadQualification?.version ?? 1
             },
@@ -463,7 +485,7 @@ export default function HomePage() {
             },
             emergency_detection: {
               enabled: features.data.emergencyDetection?.enabled ?? false,
-              keywords: JSON.stringify(features.data.emergencyDetection?.keywords ?? ["emergency", "urgent"], null, 2),
+              keywords: formatStringList(features.data.emergencyDetection?.keywords, ["emergency", "urgent"]),
               response_message: features.data.emergencyDetection?.responseMessage ?? "If this is an emergency, call emergency services or the business directly immediately.",
               escalate_label: features.data.emergencyDetection?.escalateLabel ?? "Emergency help",
               version: features.data.emergencyDetection?.version ?? 1
@@ -557,24 +579,21 @@ export default function HomePage() {
     setError("");
     setNotice("");
     try {
-      const parsedContent = parseJsonInput<Record<string, unknown>>(knowledgeDraft.content, "Knowledge content");
-      if (!parsedContent.success) {
-        setFormErrors((current) => ({ ...current, knowledge_content: parsedContent.error }));
-        return;
-      }
-
       await apiFetch(`/clients/${clientId}/knowledge`, session.token, {
         method: "POST",
         body: JSON.stringify({
           ...knowledgeDraft,
           type: knowledgeDraft.type,
-          content: parsedContent.value
+          content:
+            knowledgeDraft.type === "faq"
+              ? { question: knowledgeDraft.title, answer: knowledgeDraft.content }
+              : { body: knowledgeDraft.content }
         })
       });
       setKnowledgeDraft({
         type: "faq",
         title: "",
-        content: "{\n  \"answer\": \"\"\n}",
+        content: "",
         sort_order: 0,
         enabled: true
       });
@@ -601,7 +620,7 @@ export default function HomePage() {
         body: JSON.stringify(normalizeRequestBody("/platform/clients", platformClientDraft))
       });
       setNotice("Platform client created.");
-      setPlatformClientDraft({ name: "", domain: "", plugin_secret: "" });
+      setPlatformClientDraft({ name: "", domain: "", plugin_secret: generateActivationCode() });
       if (created?.data?.id) {
         setClientId(created.data.id as string);
         setActiveSection("overview");
@@ -792,74 +811,62 @@ export default function HomePage() {
     setFormErrors((current) => clearFieldError(current, `${sectionKey}_${field}`));
   }
 
-  async function saveFeatureWithJson(
-    path: string,
-    sectionKey: string,
-    successText: string,
-    jsonFields: Array<{ key: string; label: string }>
-  ) {
-    const form = featureForms[sectionKey];
-    const payload = { ...form };
-    const nextErrors: Record<string, string> = {};
-
-    for (const field of jsonFields) {
-      const parsed = parseJsonInput(payload[field.key], field.label);
-      if (!parsed.success) {
-        nextErrors[`${sectionKey}_${field.key}`] = parsed.error;
-        continue;
+  function updateBusinessHour(dayKey: string, field: "open" | "close" | "closed", value: string | boolean) {
+    setFeatureForms((current) => ({
+      ...current,
+      business_hours: {
+        ...current.business_hours,
+        schedule: {
+          ...current.business_hours.schedule,
+          [dayKey]: {
+            ...(current.business_hours.schedule?.[dayKey] ?? defaultBusinessSchedule()[dayKey]),
+            [field]: value
+          }
+        }
       }
-      payload[field.key] = parsed.value;
-    }
-
-    if (Object.keys(nextErrors).length > 0) {
-      setFormErrors((current) => ({ ...current, ...nextErrors }));
-      return;
-    }
-
-    setFormErrors((current) => {
-      let next = current;
-      for (const field of jsonFields) {
-        next = clearFieldError(next, `${sectionKey}_${field.key}`);
-      }
-      return next;
-    });
-
-    await saveFeature(path, payload, successText);
+    }));
   }
 
-  async function createFeatureWithJson(
-    path: string,
-    sectionKey: string,
-    successText: string,
-    jsonFields: Array<{ key: string; label: string }>
-  ) {
+  function buildFeaturePayload(sectionKey: string) {
     const form = featureForms[sectionKey];
-    const payload = { ...form };
-    const nextErrors: Record<string, string> = {};
-
-    for (const field of jsonFields) {
-      const parsed = parseJsonInput(payload[field.key], field.label);
-      if (!parsed.success) {
-        nextErrors[`${sectionKey}_${field.key}`] = parsed.error;
-        continue;
-      }
-      payload[field.key] = parsed.value;
+    if (sectionKey === "business_hours") {
+      return { ...form, schedule: serializeBusinessSchedule(form.schedule) };
     }
 
-    if (Object.keys(nextErrors).length > 0) {
-      setFormErrors((current) => ({ ...current, ...nextErrors }));
-      return;
+    if (sectionKey === "out_of_hours") {
+      return { ...form, limited_ctas: parseCtaLines(form.limited_ctas) };
     }
 
-    setFormErrors((current) => {
-      let next = current;
-      for (const field of jsonFields) {
-        next = clearFieldError(next, `${sectionKey}_${field.key}`);
-      }
-      return next;
-    });
+    if (sectionKey === "callback_config" || sectionKey === "appointment_config") {
+      return { ...form, required_fields: parseStringList(form.required_fields) };
+    }
 
-    await createFeature(path, payload, successText);
+    if (sectionKey === "quote_field") {
+      return { ...form, options: parseStringList(form.options) };
+    }
+
+    if (sectionKey === "lead_qualification") {
+      return {
+        ...form,
+        stages: parseStringList(form.stages),
+        required_fields: parseStringList(form.required_fields),
+        scoring_rules: parseKeyValueLines(form.scoring_rules)
+      };
+    }
+
+    if (sectionKey === "emergency_detection") {
+      return { ...form, keywords: parseStringList(form.keywords) };
+    }
+
+    return form;
+  }
+
+  async function saveFeatureForm(path: string, sectionKey: string, successText: string) {
+    await saveFeature(path, buildFeaturePayload(sectionKey), successText);
+  }
+
+  async function createFeatureForm(path: string, sectionKey: string, successText: string) {
+    await createFeature(path, buildFeaturePayload(sectionKey), successText);
   }
 
   function renderFieldError(key: string) {
@@ -901,6 +908,56 @@ export default function HomePage() {
       await loadSection("features");
     } catch (nextError) {
       setError(nextError instanceof Error ? nextError.message : "Feature delete failed");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function managePluginInstallation(row: any, action: "revoke" | "restore" | "rotate" | "rename") {
+    if (!session || !clientId) {
+      return;
+    }
+
+    let path = `/clients/${clientId}/plugin-installations/${row.id}/${action}`;
+    let body: unknown = {};
+    let successText = "Installation updated.";
+
+    if (action === "revoke") {
+      const reason = window.prompt("Reason for revocation", row.revoke_reason ?? "");
+      if (reason === null) {
+        return;
+      }
+      body = { reason };
+      successText = "Installation revoked.";
+    }
+
+    if (action === "rename") {
+      const label = window.prompt("Installation label", row.label ?? row.domain ?? "");
+      if (label === null) {
+        return;
+      }
+      body = { label };
+      successText = "Installation renamed.";
+    }
+
+    if (action === "rotate") {
+      if (!window.confirm("Rotate this installation secret? The WordPress plugin will need the new secret or a fresh activation.")) {
+        return;
+      }
+      path = `/clients/${clientId}/plugin-installations/${row.id}/rotate-secret`;
+      successText = "Installation secret rotated.";
+    }
+
+    setLoading(true);
+    setError("");
+    setNotice("");
+    try {
+      const payload = await apiFetch(path, session.token, { method: "POST", body: JSON.stringify(body) });
+      const rotatedSecret = payload?.data?.installation_secret;
+      setNotice(rotatedSecret ? `${successText} New secret: ${rotatedSecret}` : successText);
+      await loadSection("plugin");
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : "Installation update failed");
     } finally {
       setLoading(false);
     }
@@ -1030,7 +1087,7 @@ export default function HomePage() {
             <input className="field" value={knowledgeDraft.title} onChange={(event) => updateKnowledgeDraft("title", event.target.value)} placeholder="Title" />
             <input className="field" type="number" value={knowledgeDraft.sort_order} onChange={(event) => updateKnowledgeDraft("sort_order", Number(event.target.value))} placeholder="Sort order" />
             <label className="checkbox"><input type="checkbox" checked={knowledgeDraft.enabled} onChange={(event) => updateKnowledgeDraft("enabled", event.target.checked)} />Enabled</label>
-            <textarea className="field full-width" rows={8} value={knowledgeDraft.content} onChange={(event) => updateKnowledgeDraft("content", event.target.value)} placeholder="JSON content" />
+            <textarea className="field full-width" rows={6} value={knowledgeDraft.content} onChange={(event) => updateKnowledgeDraft("content", event.target.value)} placeholder={knowledgeDraft.type === "faq" ? "Answer" : "Content"} />
             {renderFieldError("knowledge_content")}
           </div>
           <button className="primary" onClick={() => void createKnowledge()}>
@@ -1090,10 +1147,21 @@ export default function HomePage() {
             <label className="checkbox"><input type="checkbox" checked={businessHours.enabled} onChange={(event) => updateFeatureForm("business_hours", "enabled", event.target.checked)} />Enabled</label>
             <input className="field" value={businessHours.timezone} onChange={(event) => updateFeatureForm("business_hours", "timezone", event.target.value)} placeholder="Timezone" />
             <input className="field full-width" value={businessHours.notes} onChange={(event) => updateFeatureForm("business_hours", "notes", event.target.value)} placeholder="Notes" />
-            <textarea className="field full-width" rows={8} value={businessHours.schedule} onChange={(event) => updateFeatureForm("business_hours", "schedule", event.target.value)} placeholder="Schedule JSON" />
-            {renderFieldError("business_hours_schedule")}
+            <div className="hours-grid full-width">
+              {businessWeekdays.map((day) => {
+                const daySchedule = businessHours.schedule?.[day.key] ?? defaultBusinessSchedule()[day.key];
+                return (
+                  <div className="hours-row" key={day.key}>
+                    <div className="hours-day">{day.label}</div>
+                    <input className="field" type="time" value={daySchedule.open} disabled={daySchedule.closed} onChange={(event) => updateBusinessHour(day.key, "open", event.target.value)} />
+                    <input className="field" type="time" value={daySchedule.close} disabled={daySchedule.closed} onChange={(event) => updateBusinessHour(day.key, "close", event.target.value)} />
+                    <label className="checkbox"><input type="checkbox" checked={daySchedule.closed} onChange={(event) => updateBusinessHour(day.key, "closed", event.target.checked)} />Closed</label>
+                  </div>
+                );
+              })}
+            </div>
           </div>
-          <button className="primary" onClick={() => void saveFeatureWithJson(`/clients/${clientId}/features/business-hours`, "business_hours", "Business hours saved.", [{ key: "schedule", label: "Business hours schedule" }])}>Save Business Hours</button>
+          <button className="primary" onClick={() => void saveFeatureForm(`/clients/${clientId}/features/business-hours`, "business_hours", "Business hours saved.")}>Save Business Hours</button>
         </div>
 
         <div className="panel">
@@ -1103,10 +1171,9 @@ export default function HomePage() {
             <label className="checkbox"><input type="checkbox" checked={outOfHours.form_first_mode} onChange={(event) => updateFeatureForm("out_of_hours", "form_first_mode", event.target.checked)} />Form first mode</label>
             <input className="field" value={outOfHours.greeting} onChange={(event) => updateFeatureForm("out_of_hours", "greeting", event.target.value)} placeholder="Greeting" />
             <input className="field full-width" value={outOfHours.visitor_message} onChange={(event) => updateFeatureForm("out_of_hours", "visitor_message", event.target.value)} placeholder="Visitor message" />
-            <textarea className="field full-width" rows={4} value={outOfHours.limited_ctas} onChange={(event) => updateFeatureForm("out_of_hours", "limited_ctas", event.target.value)} placeholder="Limited CTAs JSON" />
-            {renderFieldError("out_of_hours_limited_ctas")}
+            <textarea className="field full-width" rows={4} value={outOfHours.limited_ctas} onChange={(event) => updateFeatureForm("out_of_hours", "limited_ctas", event.target.value)} placeholder="One CTA per line: Label | URL | kind" />
           </div>
-          <button className="primary" onClick={() => void saveFeatureWithJson(`/clients/${clientId}/features/out-of-hours`, "out_of_hours", "Out-of-hours saved.", [{ key: "limited_ctas", label: "Out-of-hours CTAs" }])}>Save Out Of Hours</button>
+          <button className="primary" onClick={() => void saveFeatureForm(`/clients/${clientId}/features/out-of-hours`, "out_of_hours", "Out-of-hours saved.")}>Save Out Of Hours</button>
         </div>
 
         <div className="panel">
@@ -1116,10 +1183,9 @@ export default function HomePage() {
             <input className="field" value={callbackConfig.button_label} onChange={(event) => updateFeatureForm("callback_config", "button_label", event.target.value)} placeholder="Button label" />
             <input className="field" value={callbackConfig.helper_text} onChange={(event) => updateFeatureForm("callback_config", "helper_text", event.target.value)} placeholder="Helper text" />
             <input className="field full-width" value={callbackConfig.success_message} onChange={(event) => updateFeatureForm("callback_config", "success_message", event.target.value)} placeholder="Success message" />
-            <textarea className="field full-width" rows={4} value={callbackConfig.required_fields} onChange={(event) => updateFeatureForm("callback_config", "required_fields", event.target.value)} placeholder="Required fields JSON" />
-            {renderFieldError("callback_config_required_fields")}
+            <textarea className="field full-width" rows={3} value={callbackConfig.required_fields} onChange={(event) => updateFeatureForm("callback_config", "required_fields", event.target.value)} placeholder="Required fields, one per line" />
           </div>
-          <button className="primary" onClick={() => void saveFeatureWithJson(`/clients/${clientId}/features/callback-config`, "callback_config", "Callback config saved.", [{ key: "required_fields", label: "Callback required fields" }])}>Save Call Request</button>
+          <button className="primary" onClick={() => void saveFeatureForm(`/clients/${clientId}/features/callback-config`, "callback_config", "Callback config saved.")}>Save Call Request</button>
         </div>
 
         <div className="panel">
@@ -1129,10 +1195,9 @@ export default function HomePage() {
             <input className="field" value={appointmentConfig.title} onChange={(event) => updateFeatureForm("appointment_config", "title", event.target.value)} placeholder="Title" />
             <input className="field full-width" value={appointmentConfig.description} onChange={(event) => updateFeatureForm("appointment_config", "description", event.target.value)} placeholder="Description" />
             <input className="field full-width" value={appointmentConfig.success_message} onChange={(event) => updateFeatureForm("appointment_config", "success_message", event.target.value)} placeholder="Success message" />
-            <textarea className="field full-width" rows={4} value={appointmentConfig.required_fields} onChange={(event) => updateFeatureForm("appointment_config", "required_fields", event.target.value)} placeholder="Required fields JSON" />
-            {renderFieldError("appointment_config_required_fields")}
+            <textarea className="field full-width" rows={3} value={appointmentConfig.required_fields} onChange={(event) => updateFeatureForm("appointment_config", "required_fields", event.target.value)} placeholder="Required fields, one per line" />
           </div>
-          <button className="primary" onClick={() => void saveFeatureWithJson(`/clients/${clientId}/features/appointment-config`, "appointment_config", "Appointment config saved.", [{ key: "required_fields", label: "Appointment required fields" }])}>Save Appointment Request</button>
+          <button className="primary" onClick={() => void saveFeatureForm(`/clients/${clientId}/features/appointment-config`, "appointment_config", "Appointment config saved.")}>Save Appointment Request</button>
         </div>
 
         <div className="panel">
@@ -1242,10 +1307,9 @@ export default function HomePage() {
             <input className="field" type="number" value={quoteField.multiplier} onChange={(event) => updateFeatureForm("quote_field", "multiplier", Number(event.target.value))} placeholder="Multiplier" />
             <input className="field" type="number" value={quoteField.sort_order} onChange={(event) => updateFeatureForm("quote_field", "sort_order", Number(event.target.value))} placeholder="Sort order" />
             <label className="checkbox"><input type="checkbox" checked={quoteField.required} onChange={(event) => updateFeatureForm("quote_field", "required", event.target.checked)} />Required</label>
-            <textarea className="field full-width" rows={3} value={quoteField.options} onChange={(event) => updateFeatureForm("quote_field", "options", event.target.value)} placeholder="Options JSON" />
-            {renderFieldError("quote_field_options")}
+            <textarea className="field full-width" rows={3} value={quoteField.options} onChange={(event) => updateFeatureForm("quote_field", "options", event.target.value)} placeholder="Options, one per line" />
           </div>
-          <button className="secondary" onClick={() => void createFeatureWithJson(`/clients/${clientId}/features/quote-fields`, "quote_field", "Quote field added.", [{ key: "options", label: "Quote field options" }])}>Add Quote Field</button>
+          <button className="secondary" onClick={() => void createFeatureForm(`/clients/${clientId}/features/quote-fields`, "quote_field", "Quote field added.")}>Add Quote Field</button>
           <div className="table-wrap" style={{ marginTop: 16 }}>
             <table className="table">
               <thead>
@@ -1283,18 +1347,11 @@ export default function HomePage() {
           <div className="form-grid">
             <label className="checkbox"><input type="checkbox" checked={leadQualification.enabled} onChange={(event) => updateFeatureForm("lead_qualification", "enabled", event.target.checked)} />Enabled</label>
             <input className="field full-width" value={leadQualification.success_message} onChange={(event) => updateFeatureForm("lead_qualification", "success_message", event.target.value)} placeholder="Success message" />
-            <textarea className="field full-width" rows={4} value={leadQualification.stages} onChange={(event) => updateFeatureForm("lead_qualification", "stages", event.target.value)} placeholder="Stages JSON" />
-            {renderFieldError("lead_qualification_stages")}
-            <textarea className="field full-width" rows={4} value={leadQualification.required_fields} onChange={(event) => updateFeatureForm("lead_qualification", "required_fields", event.target.value)} placeholder="Required fields JSON" />
-            {renderFieldError("lead_qualification_required_fields")}
-            <textarea className="field full-width" rows={4} value={leadQualification.scoring_rules} onChange={(event) => updateFeatureForm("lead_qualification", "scoring_rules", event.target.value)} placeholder="Scoring rules JSON" />
-            {renderFieldError("lead_qualification_scoring_rules")}
+            <textarea className="field full-width" rows={3} value={leadQualification.stages} onChange={(event) => updateFeatureForm("lead_qualification", "stages", event.target.value)} placeholder="Stages, one per line" />
+            <textarea className="field full-width" rows={3} value={leadQualification.required_fields} onChange={(event) => updateFeatureForm("lead_qualification", "required_fields", event.target.value)} placeholder="Required fields, one per line" />
+            <textarea className="field full-width" rows={3} value={leadQualification.scoring_rules} onChange={(event) => updateFeatureForm("lead_qualification", "scoring_rules", event.target.value)} placeholder="Scoring rules, one per line: field = points" />
           </div>
-          <button className="primary" onClick={() => void saveFeatureWithJson(`/clients/${clientId}/features/lead-qualification`, "lead_qualification", "Lead qualification saved.", [
-            { key: "stages", label: "Lead qualification stages" },
-            { key: "required_fields", label: "Lead qualification required fields" },
-            { key: "scoring_rules", label: "Lead qualification scoring rules" }
-          ])}>Save Lead Qualification</button>
+          <button className="primary" onClick={() => void saveFeatureForm(`/clients/${clientId}/features/lead-qualification`, "lead_qualification", "Lead qualification saved.")}>Save Lead Qualification</button>
         </div>
 
         <div className="panel">
@@ -1316,10 +1373,9 @@ export default function HomePage() {
             <label className="checkbox"><input type="checkbox" checked={emergencyDetection.enabled} onChange={(event) => updateFeatureForm("emergency_detection", "enabled", event.target.checked)} />Enabled</label>
             <input className="field full-width" value={emergencyDetection.response_message} onChange={(event) => updateFeatureForm("emergency_detection", "response_message", event.target.value)} placeholder="Response message" />
             <input className="field" value={emergencyDetection.escalate_label} onChange={(event) => updateFeatureForm("emergency_detection", "escalate_label", event.target.value)} placeholder="Escalate label" />
-            <textarea className="field full-width" rows={4} value={emergencyDetection.keywords} onChange={(event) => updateFeatureForm("emergency_detection", "keywords", event.target.value)} placeholder="Keywords JSON" />
-            {renderFieldError("emergency_detection_keywords")}
+            <textarea className="field full-width" rows={3} value={emergencyDetection.keywords} onChange={(event) => updateFeatureForm("emergency_detection", "keywords", event.target.value)} placeholder="Keywords, one per line" />
           </div>
-          <button className="primary" onClick={() => void saveFeatureWithJson(`/clients/${clientId}/features/emergency-detection`, "emergency_detection", "Emergency detection saved.", [{ key: "keywords", label: "Emergency keywords" }])}>Save Emergency Detection</button>
+          <button className="primary" onClick={() => void saveFeatureForm(`/clients/${clientId}/features/emergency-detection`, "emergency_detection", "Emergency detection saved.")}>Save Emergency Detection</button>
         </div>
 
         <div className="panel">
@@ -1535,25 +1591,49 @@ export default function HomePage() {
           <table className="table">
             <thead>
               <tr>
+                <th>Name</th>
                 <th>Domain</th>
+                <th>Status</th>
                 <th>Plugin</th>
                 <th>WordPress</th>
                 <th>PHP</th>
-                <th>Elementor</th>
                 <th>Compatibility</th>
-                <th>Last Seen</th>
+                <th>Heartbeat</th>
+                <th>Revocation</th>
+                <th>Actions</th>
               </tr>
             </thead>
             <tbody>
               {rows.map((row: any) => (
                 <tr key={row.id}>
+                  <td>{row.label || "Production"}</td>
                   <td>{row.domain}</td>
+                  <td>{row.status ?? "active"}</td>
                   <td>{row.plugin_version}</td>
                   <td>{row.wordpress_version ?? "-"}</td>
                   <td>{row.php_version ?? "-"}</td>
-                  <td>{row.elementor_version ?? "-"}</td>
                   <td>{row.compatibility_status}</td>
-                  <td>{row.last_seen ?? "-"}</td>
+                  <td>{row.last_heartbeat_at ?? row.last_seen ?? "-"}</td>
+                  <td>{row.revoked_at ? `${row.revoked_at}${row.revoke_reason ? ` - ${row.revoke_reason}` : ""}` : "-"}</td>
+                  <td>
+                    <div className="table-actions">
+                      <button className="secondary compact-button" onClick={() => void managePluginInstallation(row, "rename")}>
+                        Rename
+                      </button>
+                      {row.status === "revoked" ? (
+                        <button className="secondary compact-button" onClick={() => void managePluginInstallation(row, "restore")}>
+                          Restore
+                        </button>
+                      ) : (
+                        <button className="secondary compact-button" onClick={() => void managePluginInstallation(row, "revoke")}>
+                          Revoke
+                        </button>
+                      )}
+                      <button className="secondary compact-button" onClick={() => void managePluginInstallation(row, "rotate")}>
+                        Rotate
+                      </button>
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -1692,7 +1772,12 @@ export default function HomePage() {
           <div className="form-grid">
             <input className="field" value={platformClientDraft.name} onChange={(event) => setPlatformClientDraft({ ...platformClientDraft, name: event.target.value })} placeholder="Client name" />
             <input className="field" value={platformClientDraft.domain} onChange={(event) => setPlatformClientDraft({ ...platformClientDraft, domain: event.target.value })} placeholder="Primary domain" />
-            <input className="field full-width" value={platformClientDraft.plugin_secret} onChange={(event) => setPlatformClientDraft({ ...platformClientDraft, plugin_secret: event.target.value })} placeholder="Plugin secret" />
+            <div className="toolbar full-width">
+              <input className="field compact" value={platformClientDraft.plugin_secret} onChange={(event) => setPlatformClientDraft({ ...platformClientDraft, plugin_secret: event.target.value.toUpperCase() })} placeholder="Activation code" />
+              <button className="secondary" type="button" onClick={() => setPlatformClientDraft({ ...platformClientDraft, plugin_secret: generateActivationCode() })}>
+                Generate Code
+              </button>
+            </div>
           </div>
           <button className="primary" onClick={() => void createPlatformClient()}>
             Create Client

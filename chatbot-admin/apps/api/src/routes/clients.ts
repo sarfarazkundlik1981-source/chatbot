@@ -12,8 +12,11 @@ import {
   getWidgetSettings,
   listKnowledgeEntries,
   listPluginInstallations,
+  renamePluginInstallation,
   restoreKnowledgeEntry,
   restorePluginInstallation,
+  revokePluginInstallation,
+  rotatePluginInstallationSecret,
   softDeleteKnowledgeEntry,
   upsertAiSettings,
   upsertBranding,
@@ -43,6 +46,14 @@ const brandingSchema = z.object({
   font: z.string().min(1),
   header_style: z.string().min(1),
   version: z.number().int().optional()
+});
+
+const pluginInstallationRevokeSchema = z.object({
+  reason: z.string().trim().max(500).optional()
+});
+
+const pluginInstallationRenameSchema = z.object({
+  label: z.string().trim().max(80)
 });
 
 const widgetSettingsSchema = z.object({
@@ -279,6 +290,60 @@ clientRouter.post("/clients/:clientId/knowledge/:entryId/restore", requireClient
 clientRouter.get("/clients/:clientId/plugin-installations", async (req, res) => {
   const installations = await listPluginInstallations(String(req.params.clientId));
   return sendSuccess(res, installations.map(serializePluginInstallation));
+});
+
+clientRouter.post("/clients/:clientId/plugin-installations/:installationId/revoke", requireClientRole(["owner", "admin"]), async (req, res) => {
+  const parsed = pluginInstallationRevokeSchema.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    return sendError(res, 422, "VALIDATION_ERROR", "Plugin installation revoke payload is invalid.", { issues: parsed.error.flatten() });
+  }
+
+  try {
+    await revokePluginInstallation(
+      String(req.params.clientId),
+      String(req.params.installationId),
+      (res.locals.auth as { sub?: string } | undefined)?.sub ?? "unknown",
+      parsed.data.reason,
+      res.locals.requestId as string
+    );
+    return sendSuccess(res, { revoked: true });
+  } catch (error) {
+    return sendError(res, 404, "PLUGIN_INSTALLATION_NOT_FOUND", error instanceof Error ? error.message : "Plugin installation revoke failed.");
+  }
+});
+
+clientRouter.post("/clients/:clientId/plugin-installations/:installationId/rotate-secret", requireClientRole(["owner", "admin"]), async (req, res) => {
+  try {
+    const result = await rotatePluginInstallationSecret(
+      String(req.params.clientId),
+      String(req.params.installationId),
+      (res.locals.auth as { sub?: string } | undefined)?.sub ?? "unknown",
+      res.locals.requestId as string
+    );
+    return sendSuccess(res, result);
+  } catch (error) {
+    return sendError(res, 404, "PLUGIN_INSTALLATION_NOT_FOUND", error instanceof Error ? error.message : "Plugin installation secret rotation failed.");
+  }
+});
+
+clientRouter.post("/clients/:clientId/plugin-installations/:installationId/rename", requireClientRole(["owner", "admin"]), async (req, res) => {
+  const parsed = pluginInstallationRenameSchema.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    return sendError(res, 422, "VALIDATION_ERROR", "Plugin installation rename payload is invalid.", { issues: parsed.error.flatten() });
+  }
+
+  try {
+    await renamePluginInstallation(
+      String(req.params.clientId),
+      String(req.params.installationId),
+      parsed.data.label,
+      (res.locals.auth as { sub?: string } | undefined)?.sub ?? "unknown",
+      res.locals.requestId as string
+    );
+    return sendSuccess(res, { renamed: true });
+  } catch (error) {
+    return sendError(res, 404, "PLUGIN_INSTALLATION_NOT_FOUND", error instanceof Error ? error.message : "Plugin installation rename failed.");
+  }
 });
 
 clientRouter.post("/clients/:clientId/plugin-installations/:installationId/restore", requireClientRole(["owner", "admin"]), async (req, res) => {

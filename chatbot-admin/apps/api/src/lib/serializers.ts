@@ -131,12 +131,17 @@ export function serializeKnowledgeEntry(entry: {
 export function serializePluginInstallation(installation: {
   id: string;
   clientId: string;
+  label: string | null;
   domain: string;
+  status: string;
   pluginVersion: string;
   wordpressVersion: string | null;
   phpVersion: string | null;
   elementorVersion: string | null;
   lastSeen: Date | null;
+  lastHeartbeatAt: Date | null;
+  revokedAt: Date | null;
+  revokeReason: string | null;
   version: number;
   createdAt: Date;
   updatedAt: Date;
@@ -145,12 +150,17 @@ export function serializePluginInstallation(installation: {
   return {
     id: installation.id,
     client_id: installation.clientId,
+    label: installation.label,
     domain: installation.domain,
+    status: installation.status,
     plugin_version: installation.pluginVersion,
     wordpress_version: installation.wordpressVersion,
     php_version: installation.phpVersion,
     elementor_version: installation.elementorVersion,
     last_seen: installation.lastSeen?.toISOString() ?? null,
+    last_heartbeat_at: installation.lastHeartbeatAt?.toISOString() ?? null,
+    revoked_at: installation.revokedAt?.toISOString() ?? null,
+    revoke_reason: installation.revokeReason,
     compatibility_status: installation.compatibilityStatus ?? "compatible",
     version: installation.version,
     created_at: installation.createdAt.toISOString(),

@@ -4,7 +4,8 @@ import { getLatestConfigVersion } from "./client-service.js";
 import { compareVersions } from "../lib/versioning.js";
 
 export async function getWidgetConfig(clientId: string) {
-  const [branding, widgetSettings, featureFlags, entitlements, capabilities, ctas, latestRelease, businessHours, outOfHours, callbackConfig, appointmentConfig, serviceAreaConfig, serviceAreaRules, priceListItems, quoteConfig, quoteFields, leadQualification, emergencyDetection, captchaConfig] = await Promise.all([
+  const [client, branding, widgetSettings, featureFlags, entitlements, capabilities, ctas, latestRelease, businessHours, outOfHours, callbackConfig, appointmentConfig, serviceAreaConfig, serviceAreaRules, priceListItems, quoteConfig, quoteFields, leadQualification, emergencyDetection, captchaConfig] = await Promise.all([
+    prisma.client.findUnique({ where: { id: clientId } }),
     prisma.brandingSettings.findUnique({ where: { clientId } }),
     prisma.widgetSettings.findUnique({ where: { clientId } }),
     prisma.featureFlag.findMany({ where: { clientId } }),
@@ -38,6 +39,9 @@ export async function getWidgetConfig(clientId: string) {
   return {
     config_version: await getLatestConfigVersion(clientId),
     cache_ttl_seconds: env.DEFAULT_CONFIG_CACHE_TTL_SECONDS,
+    business: {
+      name: client?.name ?? ""
+    },
     branding: {
       logo_url: branding?.logoUrl,
       avatar_url: branding?.avatarUrl,

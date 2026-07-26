@@ -188,12 +188,20 @@ model ApiCredential {
 model PluginInstallation {
   id               String   @id @default(dbgenerated("app_uuid_v7()"))
   clientId         String
+  label            String?
   domain           String
+  status           String   @default("active")
   pluginVersion    String
   wordpressVersion String?
   phpVersion       String?
   elementorVersion String?
+  installationSecretHash String?  @unique
+  installationSecretIssuedAt DateTime?
   lastSeen         DateTime?
+  lastHeartbeatAt  DateTime?
+  revokedAt        DateTime?
+  revokedBy        String?
+  revokeReason     String?
   version          Int      @default(1)
   deletedAt        DateTime?
   deletedBy        String?

@@ -1,7 +1,7 @@
 import { prisma } from "../lib/prisma.js";
 import { AppError } from "../lib/errors.js";
 import { writeAuditLog } from "../lib/audit.js";
-import { encryptValue } from "../lib/crypto.js";
+import { encryptValue, generateOpaqueToken, hashValue } from "../lib/crypto.js";
 import type { Prisma } from "@prisma/client";
 import { evaluateCompatibility } from "../lib/compatibility.js";
 import { newId } from "../lib/ids.js";
@@ -443,12 +443,79 @@ export async function listPluginInstallations(clientId: string) {
   }));
 }
 
+export async function revokePluginInstallation(clientId: string, installationId: string, revokedBy: string, reason?: string, requestId?: string) {
+  const result = await prisma.pluginInstallation.updateMany({
+    where: { id: installationId, clientId, deletedAt: null },
+    data: {
+      status: "revoked",
+      revokedAt: new Date(),
+      revokedBy,
+      revokeReason: reason || null,
+      version: { increment: 1 }
+    }
+  });
+
+  if (!result.count) {
+    throw new AppError(404, "PLUGIN_INSTALLATION_NOT_FOUND", "Plugin installation was not found.");
+  }
+
+  await writeAuditLog({ clientId, actorId: revokedBy, action: "plugin_installation.revoked", target: installationId, requestId });
+}
+
+export async function rotatePluginInstallationSecret(clientId: string, installationId: string, rotatedBy: string, requestId?: string) {
+  const installationSecret = generateOpaqueToken(32);
+  const installation = await prisma.pluginInstallation.updateMany({
+    where: { id: installationId, clientId, deletedAt: null },
+    data: {
+      status: "active",
+      installationSecretHash: hashValue(installationSecret),
+      installationSecretIssuedAt: new Date(),
+      revokedAt: null,
+      revokedBy: null,
+      revokeReason: null,
+      version: { increment: 1 }
+    }
+  });
+
+  if (!installation.count) {
+    throw new AppError(404, "PLUGIN_INSTALLATION_NOT_FOUND", "Plugin installation was not found.");
+  }
+
+  await writeAuditLog({ clientId, actorId: rotatedBy, action: "plugin_installation.secret_rotated", target: installationId, requestId });
+
+  return { installation_secret: installationSecret };
+}
+
+export async function renamePluginInstallation(clientId: string, installationId: string, label: string, renamedBy: string, requestId?: string) {
+  const result = await prisma.pluginInstallation.updateMany({
+    where: { id: installationId, clientId, deletedAt: null },
+    data: {
+      label: label.trim() || null,
+      version: { increment: 1 }
+    }
+  });
+
+  if (!result.count) {
+    throw new AppError(404, "PLUGIN_INSTALLATION_NOT_FOUND", "Plugin installation was not found.");
+  }
+
+  await writeAuditLog({ clientId, actorId: renamedBy, action: "plugin_installation.renamed", target: installationId, requestId });
+}
+
 export async function restorePluginInstallation(clientId: string, installationId: string, restoredBy: string, requestId?: string) {
   const result = await prisma.pluginInstallation.updateMany({
-    where: { id: installationId, clientId, deletedAt: { not: null } },
+    where: {
+      id: installationId,
+      clientId,
+      OR: [{ deletedAt: { not: null } }, { status: { not: "active" } }]
+    },
     data: {
+      status: "active",
       deletedAt: null,
       deletedBy: null,
+      revokedAt: null,
+      revokedBy: null,
+      revokeReason: null,
       version: { increment: 1 }
     }
   });

@@ -256,6 +256,23 @@ select.field {
   flex-wrap: wrap;
 }
 
+.hours-grid {
+  display: grid;
+  gap: 10px;
+}
+
+.hours-row {
+  display: grid;
+  grid-template-columns: minmax(96px, 1fr) 140px 140px 110px;
+  gap: 10px;
+  align-items: center;
+}
+
+.hours-day {
+  color: var(--muted);
+  font-weight: 600;
+}
+
 .page-header {
   display: flex;
   justify-content: space-between;
@@ -323,6 +340,19 @@ select.field {
   font-size: 0.82rem;
   letter-spacing: 0.04em;
   text-transform: uppercase;
+}
+
+.table-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 210px;
+}
+
+.compact-button {
+  min-height: 34px;
+  padding: 7px 10px;
+  font-size: 0.82rem;
 }
 
 .error-text {
@@ -406,6 +436,10 @@ code {
   }
 
   .form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .hours-row {
     grid-template-columns: 1fr;
   }
 

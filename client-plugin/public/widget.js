@@ -1,9 +1,10 @@
 (function () {
-  if (!window.WCP_CONFIG || !window.WCP_CONFIG.backendUrl || !window.WCP_CONFIG.clientId || !window.WCP_CONFIG.ajaxUrl || !window.WCP_CONFIG.proxyNonce) {
+  const connectorId = window.WCP_CONFIG && (window.WCP_CONFIG.connectorId || window.WCP_CONFIG.installationId);
+  if (!window.WCP_CONFIG || !window.WCP_CONFIG.backendUrl || !connectorId || !window.WCP_CONFIG.ajaxUrl || !window.WCP_CONFIG.proxyNonce) {
     return;
   }
 
-  const storagePrefix = ["wcp", window.WCP_CONFIG.clientId, window.WCP_CONFIG.siteHost || window.location.hostname].join(":");
+  const storagePrefix = ["wcp", connectorId, window.WCP_CONFIG.siteHost || window.location.hostname].join(":");
 
   function storageKey(name) {
     return storagePrefix + ":" + name;
@@ -74,6 +75,18 @@
       return false;
     }
     return true;
+  }
+
+  function shouldRenderPlatformConfig() {
+    return !(state.config && state.config.widget && state.config.widget.hide_for_logged_in_users && window.WCP_CONFIG.isLoggedIn);
+  }
+
+  function removeWidgetShell() {
+    [launcher, panel, backdrop].forEach(function (element) {
+      if (element.parentNode) {
+        element.parentNode.removeChild(element);
+      }
+    });
   }
 
   function createBox(tag, style) {
@@ -823,6 +836,14 @@
     setComposerDisabled(true);
     return bootstrapPlugin()
       .then(loadConfig)
+      .then(function () {
+        if (!shouldRenderPlatformConfig()) {
+          state.booting = false;
+          removeWidgetShell();
+          return Promise.reject({ wcpSilent: true });
+        }
+        return null;
+      })
       .then(createOrResumeSession)
       .then(function () {
         state.booting = false;
@@ -836,6 +857,9 @@
         }
       })
       .catch(function (error) {
+        if (error && error.wcpSilent) {
+          return;
+        }
         state.booting = false;
         console.error(error);
         setUnavailableState("Chat is temporarily unavailable. Please try again or use the contact options on this page.");
@@ -942,7 +966,6 @@
           "Content-Type": "application/json"
         },
         body: JSON.stringify({
-          client_id: window.WCP_CONFIG.clientId,
           domain: window.location.hostname,
           plugin_version: window.WCP_CONFIG.pluginVersion,
           wordpress_version: window.WCP_CONFIG.wordpressVersion,

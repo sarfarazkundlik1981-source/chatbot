@@ -5,4 +5,4 @@ dist/
 .env
 .env.*
 coverage/
-
+.next-dev-*.log

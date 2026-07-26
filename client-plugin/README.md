@@ -12,33 +12,27 @@ This folder is prepared as the standalone WordPress plugin project for the centr
 
 ## Current capabilities
 
-- stores `backend_url`, `client_id`, and `client_secret` in WordPress server-side settings
-- supports `floating`, `embed`, `button`, and `popup` display modes
+- asks the customer only for platform URL and activation code
+- stores installation-specific connector credentials internally after successful activation
 - supports `[wcp_chatbot]` and `[wcp_chatbot_trigger]` shortcodes
 - registers an Elementor widget for embed, button-trigger, and popup-trigger use cases
 - performs plugin verification server-side in PHP and passes only short-lived bootstrap data to the browser
-- scopes browser-side cached config and resume state per client and site hostname
+- shows a read-only platform-controlled enabled-feature summary after connection
+- scopes browser-side cached config and resume state per plugin installation and site hostname
 - silently refreshes browser widget tokens through WordPress PHP when short-lived tokens expire
 - sends heartbeat metadata including WordPress, PHP, and Elementor versions
 - schedules a server-side heartbeat through WordPress cron so installation visibility does not depend only on visitor traffic
 - caches widget config locally in the browser
 - resumes sessions with the backend
-- supports optional WordPress-side lead email notifications through `wp_mail()`
 - renders backend-driven callback request, appointment request, service-area check, and instant quote tools when enabled
-- enforces WordPress-side display rules:
-  - desktop only
-  - mobile only
-  - hide for logged-in users
-  - hide on checkout
-  - include/exclude path matching
 
 ## Operational notes
 
-- `wp_mail()` notifications are optional, run server-side, and use the site's existing WordPress mail setup
-- backend AI, licensing, and conversation logic remain centralized in the platform
+- client accounts, activation codes, branding, content, AI instructions, API keys, pricing, business hours, and feature setup are managed in the platform admin
+- backend AI, licensing, lead handling, and conversation logic remain centralized in the platform
 - the plugin stays intentionally thin and does not make direct OpenRouter calls
 - feature availability is driven by backend public widget config and respects capability, entitlement, and feature-flag checks
-- the browser never receives the long-lived connector secret
+- the browser never receives the installation secret or any client-level connector secret
 
 ## Release usage
 
