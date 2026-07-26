@@ -123,15 +123,37 @@ add_action('admin_menu', 'wcp_register_menu');
 
 function wcp_render_settings_page(): void
 {
+    $status = sanitize_text_field((string) ($_GET['wcp_status'] ?? ''));
+    $message = sanitize_text_field((string) ($_GET['wcp_message'] ?? ''));
+    $compatibility = sanitize_text_field((string) ($_GET['wcp_compatibility'] ?? ''));
     ?>
     <div class="wrap">
         <h1>Chatbot Connector</h1>
+        <?php if ($status && $message) : ?>
+            <div class="notice notice-<?php echo $status === 'success' ? 'success' : 'error'; ?> is-dismissible">
+                <p>
+                    <strong><?php echo esc_html($message); ?></strong>
+                    <?php if ($compatibility) : ?>
+                        <br />
+                        <span>Compatibility: <?php echo esc_html($compatibility); ?></span>
+                    <?php endif; ?>
+                </p>
+            </div>
+        <?php endif; ?>
         <form method="post" action="options.php">
             <?php
             settings_fields('wcp_connector');
             do_settings_sections('wcp_connector');
             submit_button('Save Settings');
             ?>
+        </form>
+        <hr />
+        <h2>Connection Test</h2>
+        <p>Save settings first, then run a live verification against the platform backend.</p>
+        <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
+            <input type="hidden" name="action" value="wcp_test_connection" />
+            <?php wp_nonce_field('wcp_test_connection', 'wcp_test_connection_nonce'); ?>
+            <?php submit_button('Test Connection', 'secondary', 'submit', false); ?>
         </form>
     </div>
     <?php
@@ -273,6 +295,93 @@ function wcp_verify_backend_session()
 
     return $data;
 }
+
+function wcp_run_connection_test()
+{
+    $settings = wcp_get_settings();
+    $domain = wcp_get_site_domain();
+    if (!$domain) {
+        return new WP_Error('wcp_invalid_domain', 'Site domain could not be determined.');
+    }
+
+    if (empty($settings['backend_url']) || empty($settings['client_id']) || empty($settings['client_secret'])) {
+        return new WP_Error('wcp_not_configured', 'Backend URL, Client ID, and Client Secret are required.');
+    }
+
+    delete_transient('wcp_bootstrap_' . md5((string) $settings['client_id'] . '|' . $domain));
+
+    $result = wcp_backend_request('/verify', [
+        'client_id' => sanitize_text_field((string) $settings['client_id']),
+        'client_secret' => sanitize_text_field((string) $settings['client_secret']),
+        'domain' => $domain,
+        'plugin_version' => WCP_PLUGIN_VERSION,
+        'wordpress_version' => get_bloginfo('version'),
+        'php_version' => PHP_VERSION,
+        'elementor_version' => defined('ELEMENTOR_VERSION') ? ELEMENTOR_VERSION : '',
+    ], [
+        'Idempotency-Key' => 'verify-' . md5($domain . '|' . WCP_PLUGIN_VERSION . '|manual-test'),
+    ]);
+
+    if (is_wp_error($result)) {
+        return $result;
+    }
+
+    if (($result['status'] ?? 500) >= 400 || empty($result['payload']['success'])) {
+        return new WP_Error(
+            'wcp_verify_failed',
+            (string) ($result['payload']['error']['message'] ?? 'Plugin verification failed.'),
+            [
+                'status' => (int) ($result['status'] ?? 500),
+                'payload' => $result['payload'],
+            ]
+        );
+    }
+
+    return $result['payload']['data'] ?? [];
+}
+
+function wcp_handle_test_connection(): void
+{
+    if (!current_user_can('manage_options')) {
+        wp_die('You do not have permission to access this page.');
+    }
+
+    check_admin_referer('wcp_test_connection', 'wcp_test_connection_nonce');
+
+    $redirectUrl = add_query_arg(
+        [
+            'page' => 'wcp-connector',
+        ],
+        admin_url('options-general.php')
+    );
+
+    $result = wcp_run_connection_test();
+    if (is_wp_error($result)) {
+        wp_safe_redirect(
+            add_query_arg(
+                [
+                    'wcp_status' => 'error',
+                    'wcp_message' => $result->get_error_message(),
+                ],
+                $redirectUrl
+            )
+        );
+        exit;
+    }
+
+    wp_safe_redirect(
+        add_query_arg(
+            [
+                'wcp_status' => 'success',
+                'wcp_message' => 'Connected successfully.',
+                'wcp_compatibility' => (string) ($result['compatibility_status'] ?? 'compatible'),
+            ],
+            $redirectUrl
+        )
+    );
+    exit;
+}
+add_action('admin_post_wcp_test_connection', 'wcp_handle_test_connection');
 
 function wcp_send_server_heartbeat(): void
 {
