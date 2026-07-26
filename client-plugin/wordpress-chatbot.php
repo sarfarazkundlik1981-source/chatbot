@@ -375,6 +375,13 @@ function wcp_backend_request(string $path, array $body, array $headers = [], ?ar
     ];
 }
 
+function wcp_filter_empty_payload_values(array $payload): array
+{
+    return array_filter($payload, static function ($value): bool {
+        return $value !== null && $value !== '';
+    });
+}
+
 function wcp_backend_get(string $path, array $headers = [], ?array $settingsOverride = null)
 {
     $settings = $settingsOverride ?: wcp_get_settings();
@@ -766,7 +773,7 @@ function wcp_send_lead_notification(): void
         $data = [];
     }
 
-    $result = wcp_backend_request('/lead', [
+    $lead_payload = wcp_filter_empty_payload_values([
         'name' => $name ?: null,
         'email' => $lead_email ?: null,
         'phone' => $phone ?: null,
@@ -774,7 +781,9 @@ function wcp_send_lead_notification(): void
         'message' => $message ?: null,
         'data' => $data,
         'captcha_token' => $captcha_token ?: null,
-    ], [
+    ]);
+
+    $result = wcp_backend_request('/lead', $lead_payload, [
         'Authorization' => 'Bearer ' . $verification['token'],
         'Idempotency-Key' => wp_generate_uuid4(),
     ]);

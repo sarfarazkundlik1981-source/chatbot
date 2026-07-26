@@ -115,7 +115,7 @@
   const messages = createBox("div", "flex:1;overflow:auto;padding:18px 18px 12px;background:#f6f7f9;display:flex;flex-direction:column;gap:12px;font:400 15px/1.5 'Segoe UI',Arial,sans-serif");
   const actions = createBox("div", "display:none;gap:8px;flex-wrap:wrap;padding:0 20px 10px;background:#f6f7f9");
   const tools = createBox("div", "display:none;gap:8px;padding:0 20px 10px;background:#f6f7f9;flex-wrap:wrap");
-  const formHost = createBox("div", "display:none;padding:12px 20px;background:#f6f7f9;border-top:1px solid #edf0f4");
+  const formHost = createBox("div", "display:none;padding:12px 16px;background:#f6f7f9;border-top:1px solid #edf0f4;max-height:52%;overflow:auto;flex:0 1 auto;box-sizing:border-box");
   const captchaHost = createBox("div", "display:none");
   const composerWrap = createBox("div", "padding:16px 14px 8px;background:#fff;border-top:1px solid #edf0f4");
   const composer = createBox("form", "display:flex;align-items:center;gap:8px;padding:6px 8px 6px 14px;border:1px solid #d8dde8;border-radius:14px;background:#f9fafb");
@@ -425,15 +425,19 @@
   function showInlineForm(title, fields, onSubmit) {
     formHost.innerHTML = "";
     formHost.style.display = "block";
-    const heading = createBox("div", "font:600 13px/1.3 'Segoe UI',sans-serif;margin-bottom:8px");
+    const heading = createBox("div", "font:700 14px/1.3 'Segoe UI',Arial,sans-serif;margin:0 0 10px;color:#111827");
     heading.textContent = title;
-    const form = createBox("form", "display:flex;flex-direction:column;gap:8px");
+    const form = createBox("form", "display:flex;flex-direction:column;gap:9px;margin:0;width:100%;box-sizing:border-box");
     const inputs = {};
     fields.forEach(function (field) {
-      const element = field.multiline ? createBox("textarea", "padding:10px 12px;border-radius:12px;border:1px solid #d8deea;background:#fff;color:#111827;font:400 13px/1.4 'Segoe UI',sans-serif") : createBox("input", "padding:10px 12px;border-radius:12px;border:1px solid #d8deea;background:#fff;color:#111827;font:400 13px/1.4 'Segoe UI',sans-serif");
+      const fieldStyle = "display:block;width:100%;box-sizing:border-box;min-height:40px;padding:10px 12px;border-radius:10px;border:1px solid #d8deea;background:#fff;color:#111827;font:400 13px/1.4 'Segoe UI',Arial,sans-serif;outline:none;box-shadow:none;appearance:none";
+      const element = field.multiline ? createBox("textarea", fieldStyle + ";min-height:78px;resize:vertical") : createBox("input", fieldStyle);
       element.className = "wcp-chatbot-form-field";
       if (!field.multiline) {
         element.type = field.type || "text";
+      }
+      if (field.required) {
+        element.required = true;
       }
       element.placeholder = field.label;
       if (field.value !== undefined) {
@@ -442,18 +446,31 @@
       inputs[field.key] = element;
       form.appendChild(element);
     });
-    const submit = createBox("button", `padding:10px 14px;border:none;border-radius:12px;background:${appearanceColor("button_bg_color", "#050505")};color:${appearanceColor("button_text_color", "#ffffff")};cursor:pointer;font:600 13px/1.2 'Segoe UI',Arial,sans-serif`);
+    const submit = createBox("button", `display:flex;align-items:center;justify-content:center;width:100%;box-sizing:border-box;min-height:42px;margin-top:2px;padding:10px 14px;border:none;border-radius:10px;background:${appearanceColor("button_bg_color", "#050505")};color:${appearanceColor("button_text_color", "#ffffff")};cursor:pointer;font:700 13px/1.2 'Segoe UI',Arial,sans-serif;text-align:center`);
     submit.className = "wcp-chatbot-form-submit";
     submit.type = "submit";
     submit.textContent = "Submit";
     form.appendChild(submit);
     form.addEventListener("submit", function (event) {
       event.preventDefault();
+      if (!form.checkValidity()) {
+        form.reportValidity();
+        return;
+      }
+      submit.disabled = true;
+      submit.style.opacity = "0.7";
+      submit.style.cursor = "not-allowed";
       const values = {};
       Object.keys(inputs).forEach(function (key) {
         values[key] = inputs[key].value;
       });
-      onSubmit(values);
+      Promise.resolve(onSubmit(values)).finally(function () {
+        if (submit.parentNode) {
+          submit.disabled = false;
+          submit.style.opacity = "1";
+          submit.style.cursor = "pointer";
+        }
+      });
     });
     formHost.appendChild(heading);
     formHost.appendChild(form);
@@ -479,12 +496,12 @@
             "Request a call",
             [
               { key: "name", label: "Name" },
-              { key: "phone", label: "Phone" },
+              { key: "phone", label: "Phone", required: true },
               { key: "email", label: "Email", type: "email" },
               { key: "message", label: "Message", multiline: true }
             ],
             function (values) {
-              getCaptchaToken("callback")
+              return getCaptchaToken("callback")
                 .then(function (captchaToken) {
                   return submitLeadProxy({
                     name: values.name,
@@ -516,15 +533,15 @@
           showInlineForm(
             state.config.appointment_request.title || "Request appointment",
             [
-              { key: "name", label: "Name" },
-              { key: "email", label: "Email", type: "email" },
-              { key: "phone", label: "Phone" },
+              { key: "name", label: "Name", required: true },
+              { key: "email", label: "Email", type: "email", required: true },
+              { key: "phone", label: "Phone", required: true },
               { key: "service", label: "Service" },
-              { key: "preferred_date", label: "Preferred date" },
-              { key: "preferred_time", label: "Preferred time" }
+              { key: "preferred_date", label: "Preferred date", required: true },
+              { key: "preferred_time", label: "Preferred time", required: true }
             ],
             function (values) {
-              getCaptchaToken("appointment")
+              return getCaptchaToken("appointment")
                 .then(function (captchaToken) {
                   return submitLeadProxy({
                     name: values.name,
@@ -557,8 +574,8 @@
         kind: "service-area",
         label: "Check service area",
         onClick: function () {
-          showInlineForm("Check service area", [{ key: "query", label: state.config.service_area.input_label || "Enter your city or ZIP" }], function (values) {
-            fetchWithPluginAuth("/service-area-check", {
+          showInlineForm("Check service area", [{ key: "query", label: state.config.service_area.input_label || "Enter your city or ZIP", required: true }], function (values) {
+            return fetchWithPluginAuth("/service-area-check", {
               method: "POST",
               headers: {
                 "Content-Type": "application/json"
@@ -597,7 +614,7 @@
             };
           });
           showInlineForm(state.config.quote_calculator.title || "Instant quote", fields, function (values) {
-            getCaptchaToken("quote")
+            return getCaptchaToken("quote")
               .then(function (captchaToken) {
                 return fetchWithPluginAuth("/quote-calculate", {
                   method: "POST",

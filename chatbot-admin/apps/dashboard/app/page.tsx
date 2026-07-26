@@ -96,10 +96,27 @@ const defaultChatbotCss = `.wcp-chatbot-panel {
   font-size: 15px !important;
 }
 
+.wcp-chatbot-form-host {
+  max-height: 52% !important;
+  overflow: auto !important;
+}
+
+.wcp-chatbot-form-field {
+  width: 100% !important;
+  min-height: 40px !important;
+  background: #ffffff !important;
+  color: #111827 !important;
+  border: 1px solid #d8deea !important;
+  border-radius: 10px !important;
+  font-size: 13px !important;
+}
+
 .wcp-chatbot-send,
-.wcp-chatbot-action {
+.wcp-chatbot-action,
+.wcp-chatbot-form-submit {
   background: #8f8f8f !important;
   color: #ffffff !important;
+  border-radius: 10px !important;
 }`;
 
 const clientOptionalSections = new Set<Section>(["platform", "health"]);

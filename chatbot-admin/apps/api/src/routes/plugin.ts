@@ -14,6 +14,19 @@ import { activatePlugin, createPluginSession, recordHeartbeat, resumePluginSessi
 import { getWidgetConfig } from "../services/widget-service.js";
 import { requireIdempotency, requireIdempotencyHeader, persistIdempotentResponse } from "../lib/idempotency.js";
 
+const optionalTextField = (max: number) => z.preprocess(
+  (value) => (value === null || value === "" ? undefined : value),
+  z.string().trim().max(max).optional()
+);
+const optionalEmailField = z.preprocess(
+  (value) => (value === null || value === "" ? undefined : value),
+  z.string().trim().email().max(320).optional()
+);
+const optionalCaptchaToken = z.preprocess(
+  (value) => (value === null || value === "" ? undefined : value),
+  z.string().min(10).max(4000).optional()
+);
+
 const verifySchema = z.object({
   client_id: z.string().uuid().or(z.string().min(8)),
   client_secret: z.string().min(8),
@@ -359,7 +372,7 @@ pluginRouter.post("/chat", requireAuth("plugin"), chatProtection, async (req, re
   const body = z.object({
     conversation_id: z.string().min(1).max(100),
     message: z.string().trim().min(1).max(2000),
-    captcha_token: z.string().min(10).max(4000).optional()
+    captcha_token: optionalCaptchaToken
   }).safeParse(req.body);
 
   if (!body.success) {
@@ -385,7 +398,7 @@ pluginRouter.post("/chat/stream", requireAuth("plugin"), chatProtection, async (
   const body = z.object({
     conversation_id: z.string().min(1).max(100),
     message: z.string().trim().min(1).max(2000),
-    captcha_token: z.string().min(10).max(4000).optional()
+    captcha_token: optionalCaptchaToken
   }).safeParse(req.body);
 
   if (!body.success) {
@@ -424,13 +437,13 @@ pluginRouter.post("/chat/stream", requireAuth("plugin"), chatProtection, async (
 
 pluginRouter.post("/lead", requireAuth("plugin"), leadProtection, requireIdempotency("plugin_lead_submit"), requireIdempotencyHeader, async (req, res) => {
   const body = z.object({
-    name: z.string().trim().max(120).optional(),
-    email: z.string().trim().email().max(320).optional(),
-    phone: z.string().trim().max(50).optional(),
-    status: z.string().trim().max(50).optional(),
-    message: z.string().trim().max(4000).optional(),
+    name: optionalTextField(120),
+    email: optionalEmailField,
+    phone: optionalTextField(50),
+    status: optionalTextField(50),
+    message: optionalTextField(4000),
     data: z.record(z.any()).optional(),
-    captcha_token: z.string().min(10).max(4000).optional()
+    captcha_token: optionalCaptchaToken
   }).safeParse(req.body);
 
   if (!body.success) {
@@ -477,7 +490,7 @@ pluginRouter.post("/service-area-check", requireAuth("plugin"), serviceAreaProte
 pluginRouter.post("/quote-calculate", requireAuth("plugin"), quoteProtection, async (req, res) => {
   const body = z.object({
     values: z.record(z.any()),
-    captcha_token: z.string().min(10).max(4000).optional()
+    captcha_token: optionalCaptchaToken
   }).safeParse(req.body);
   if (!body.success) {
     return sendError(res, 422, "VALIDATION_ERROR", "Quote calculation payload is invalid.", { issues: body.error.flatten() });
