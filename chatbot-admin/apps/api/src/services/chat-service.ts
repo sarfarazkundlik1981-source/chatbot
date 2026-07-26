@@ -207,7 +207,7 @@ export async function sendChatMessage(clientId: string, conversationId: string, 
     }
   });
 
-  const [recentMessages, summary, ctas, businessHours, outOfHours, callbackConfig, appointmentConfig, serviceAreaConfig, quoteConfig] = await Promise.all([
+  const [recentMessages, summary, ctas, businessHours, outOfHours, callbackConfig, appointmentConfig, serviceAreaConfig, quoteConfig, featureFlags, entitlements] = await Promise.all([
     prisma.message.findMany({
       where: { conversationId },
       orderBy: { createdAt: "desc" },
@@ -220,7 +220,9 @@ export async function sendChatMessage(clientId: string, conversationId: string, 
     prisma.callbackRequestConfig.findUnique({ where: { clientId } }),
     prisma.appointmentRequestConfig.findUnique({ where: { clientId } }),
     prisma.serviceAreaConfig.findUnique({ where: { clientId } }),
-    prisma.quoteCalculatorConfig.findUnique({ where: { clientId } })
+    prisma.quoteCalculatorConfig.findUnique({ where: { clientId } }),
+    prisma.featureFlag.findMany({ where: { clientId } }),
+    prisma.clientEntitlement.findMany({ where: { clientId } })
   ]);
   const openNow = businessHours?.enabled ? isWithinBusinessHours(businessHours.schedule, businessHours.timezone) : true;
 
@@ -300,34 +302,49 @@ export async function sendChatMessage(clientId: string, conversationId: string, 
     await eventBus.emit({ type: "unanswered_question.detected", clientId, conversationId });
   }
 
+  const flagMap = new Map<string, boolean>(featureFlags.map((flag) => [flag.key, flag.enabled]));
+  const entitlementMap = new Map<string, boolean>(entitlements.map((entitlement) => [entitlement.key, entitlement.allowed]));
+  const isExplicitlyDisabled = (keys: string[]) => keys.some((key) => flagMap.get(key) === false || entitlementMap.get(key) === false);
+  const featureEnabled = (configEnabled: boolean | undefined, keys: string[]) => Boolean(configEnabled) && !isExplicitlyDisabled(keys);
+  const featureKeys = {
+    callback: ["callback", "callback_request", "lead_capture"],
+    appointment: ["appointment", "appointment_request", "appointment_booking", "booking"],
+    serviceArea: ["service_area", "service-area", "service_area_check"],
+    quote: ["quote", "quote_calculator", "instant_quote"]
+  };
+  const callbackEnabled = featureEnabled(callbackConfig?.enabled, featureKeys.callback);
+  const appointmentEnabled = featureEnabled(appointmentConfig?.enabled, featureKeys.appointment);
+  const serviceAreaEnabled = featureEnabled(serviceAreaConfig?.enabled, featureKeys.serviceArea);
+  const quoteEnabled = featureEnabled(quoteConfig?.enabled, featureKeys.quote);
+
   function isFeatureCtaAllowed(kind: string) {
     const normalizedKind = kind.toLowerCase();
     if (normalizedKind === "callback") {
-      return Boolean(callbackConfig?.enabled);
+      return callbackEnabled;
     }
     if (normalizedKind === "appointment" || normalizedKind === "booking") {
-      return Boolean(appointmentConfig?.enabled);
+      return appointmentEnabled;
     }
     if (normalizedKind === "service-area") {
-      return Boolean(serviceAreaConfig?.enabled);
+      return serviceAreaEnabled;
     }
     if (normalizedKind === "quote") {
-      return Boolean(quoteConfig?.enabled);
+      return quoteEnabled;
     }
     return true;
   }
 
   const ctaOptions = ctas.filter((cta) => isFeatureCtaAllowed(cta.kind)).map((cta) => ({ label: cta.label, url: cta.url, kind: cta.kind }));
-  if (callbackConfig?.enabled) {
+  if (callbackEnabled && callbackConfig) {
     ctaOptions.push({ label: callbackConfig.buttonLabel, url: "#callback-request", kind: "callback" });
   }
-  if (appointmentConfig?.enabled) {
+  if (appointmentEnabled && appointmentConfig) {
     ctaOptions.push({ label: appointmentConfig.title, url: "#appointment-request", kind: "appointment" });
   }
-  if (serviceAreaConfig?.enabled) {
+  if (serviceAreaEnabled) {
     ctaOptions.push({ label: "Check service area", url: "#service-area", kind: "service-area" });
   }
-  if (quoteConfig?.enabled) {
+  if (quoteEnabled && quoteConfig) {
     ctaOptions.push({ label: quoteConfig.title, url: "#instant-quote", kind: "quote" });
   }
 

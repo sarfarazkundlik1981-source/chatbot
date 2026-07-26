@@ -3,7 +3,7 @@
  * Plugin Name: WordPress Chatbot Connector
  * Plugin URI: https://example.com
  * Description: Thin connector plugin for the centralized WordPress AI chatbot platform.
- * Version: 0.1.5
+ * Version: 0.1.6
  * Requires at least: 6.5
  * Requires PHP: 8.1
  * Author: Platform Team
@@ -13,7 +13,7 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-define('WCP_PLUGIN_VERSION', '0.1.5');
+define('WCP_PLUGIN_VERSION', '0.1.6');
 define('WCP_OPTION_KEY', 'wcp_connector_settings');
 define('WCP_HEARTBEAT_HOOK', 'wcp_server_heartbeat');
 

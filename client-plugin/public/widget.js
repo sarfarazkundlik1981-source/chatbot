@@ -241,8 +241,15 @@
   function setPanelVisibility(open) {
     state.open = open;
     panel.style.setProperty("display", open ? "flex" : "none", "important");
+    panel.style.setProperty("visibility", open ? "visible" : "hidden", "important");
+    panel.style.setProperty("opacity", open ? "1" : "0", "important");
+    panel.style.setProperty("pointer-events", open ? "auto" : "none", "important");
+    panel.setAttribute("aria-hidden", open ? "false" : "true");
     if (state.isPopupMode) {
       backdrop.style.setProperty("display", open ? "block" : "none", "important");
+      backdrop.style.setProperty("visibility", open ? "visible" : "hidden", "important");
+      backdrop.style.setProperty("opacity", open ? "1" : "0", "important");
+      backdrop.style.setProperty("pointer-events", open ? "auto" : "none", "important");
       document.body.style.overflow = open ? "hidden" : "";
     }
   }
@@ -1088,6 +1095,16 @@
 
   launcher.addEventListener("click", function () {
     setPanelVisibility(!state.open);
+  });
+
+  panel.addEventListener("click", function (event) {
+    const target = event.target && event.target.closest ? event.target.closest(".wcp-chatbot-close,.wcp-chatbot-minimize") : null;
+    if (!target) {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    setPanelVisibility(false);
   });
 
   backdrop.addEventListener("click", function (event) {

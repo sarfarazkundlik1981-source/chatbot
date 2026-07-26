@@ -35,19 +35,31 @@ export async function getWidgetConfig(clientId: string) {
     result[key] = capabilitySet.has(key) && entitlementMap.get(key) !== false && flagMap.get(key) !== false;
     return result;
   }, {});
+  const isExplicitlyDisabled = (keys: string[]) => keys.some((key) => flagMap.get(key) === false || entitlementMap.get(key) === false);
+  const featureEnabled = (configEnabled: boolean | undefined, keys: string[]) => Boolean(configEnabled) && !isExplicitlyDisabled(keys);
+  const featureKeys = {
+    callback: ["callback", "callback_request", "lead_capture"],
+    appointment: ["appointment", "appointment_request", "appointment_booking", "booking"],
+    serviceArea: ["service_area", "service-area", "service_area_check"],
+    quote: ["quote", "quote_calculator", "instant_quote"]
+  };
+  const callbackEnabled = featureEnabled(callbackConfig?.enabled, featureKeys.callback);
+  const appointmentEnabled = featureEnabled(appointmentConfig?.enabled, featureKeys.appointment);
+  const serviceAreaEnabled = featureEnabled(serviceAreaConfig?.enabled, featureKeys.serviceArea);
+  const quoteEnabled = featureEnabled(quoteConfig?.enabled, featureKeys.quote);
   const isFeatureCtaAllowed = (kind: string) => {
     const normalizedKind = kind.toLowerCase();
     if (normalizedKind === "callback") {
-      return Boolean(callbackConfig?.enabled);
+      return callbackEnabled;
     }
     if (normalizedKind === "appointment" || normalizedKind === "booking") {
-      return Boolean(appointmentConfig?.enabled);
+      return appointmentEnabled;
     }
     if (normalizedKind === "service-area") {
-      return Boolean(serviceAreaConfig?.enabled);
+      return serviceAreaEnabled;
     }
     if (normalizedKind === "quote") {
-      return Boolean(quoteConfig?.enabled);
+      return quoteEnabled;
     }
     return true;
   };
@@ -119,7 +131,7 @@ export async function getWidgetConfig(clientId: string) {
       : null,
     callback_request: callbackConfig
       ? {
-          enabled: callbackConfig.enabled,
+          enabled: callbackEnabled,
           button_label: callbackConfig.buttonLabel,
           helper_text: callbackConfig.helperText,
           success_message: callbackConfig.successMessage,
@@ -128,7 +140,7 @@ export async function getWidgetConfig(clientId: string) {
       : null,
     appointment_request: appointmentConfig
       ? {
-          enabled: appointmentConfig.enabled,
+          enabled: appointmentEnabled,
           title: appointmentConfig.title,
           description: appointmentConfig.description,
           required_fields: appointmentConfig.requiredFields,
@@ -137,7 +149,7 @@ export async function getWidgetConfig(clientId: string) {
       : null,
     service_area: serviceAreaConfig
       ? {
-          enabled: serviceAreaConfig.enabled,
+          enabled: serviceAreaEnabled,
           mode: serviceAreaConfig.mode,
           input_label: serviceAreaConfig.inputLabel,
           success_message: serviceAreaConfig.successMessage,
@@ -160,7 +172,7 @@ export async function getWidgetConfig(clientId: string) {
     })),
     quote_calculator: quoteConfig
       ? {
-          enabled: quoteConfig.enabled,
+          enabled: quoteEnabled,
           title: quoteConfig.title,
           description: quoteConfig.description,
           success_message: quoteConfig.successMessage,
